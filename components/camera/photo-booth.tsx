@@ -822,13 +822,77 @@ export function PhotoBooth() {
   const remainingSlots = selectedLayout.totalShots - filledCount;
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6 px-4 lg:grid-cols-[1fr_360px]">
-      {/* Left: Control Deck + CRT Camera Viewfinder */}
-      <div className="space-y-5">
+    <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-[230px_1fr_360px] lg:items-start">
+      {/* Column 1 (Left): Filter Cartridges + FX Slider */}
+      <div className="brutal-box order-2 space-y-3 bg-white p-3 lg:order-1">
+        <div className="flex items-center justify-between border-b-[3px] border-zinc-950 pb-2">
+          <span className="font-pixel text-xs font-bold uppercase">
+            FILTERS ({CAMERA_FILTERS.length})
+          </span>
+          <span className="bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#facc15]">
+            {activeFilter.category}
+          </span>
+        </div>
+
+        {/* Filter Intensity Bar */}
+        {activeFilter.id !== "normal" &&
+          activeFilter.effect !== "mirror" &&
+          activeFilter.effect !== "duotone" &&
+          activeFilter.effect !== "thermal" && (
+            <div className="space-y-1.5 border-2 border-zinc-950 bg-[#fffbeb] p-2">
+              <div className="flex items-center justify-between">
+                <span className="font-pixel text-[10px] font-bold uppercase">
+                  FX POWER:
+                </span>
+                <span className="bg-[#facc15] px-1.5 py-0.5 font-pixel text-[10px] font-bold">
+                  {intensity}%
+                </span>
+              </div>
+              <Slider
+                value={[intensity]}
+                min={10}
+                max={100}
+                step={1}
+                onValueChange={(vals) =>
+                  setIntensity(Array.isArray(vals) ? vals[0] : vals)
+                }
+              />
+            </div>
+          )}
+
+        {/* Scrollable Filter List */}
+        <div className="grid max-h-[460px] grid-cols-2 gap-1.5 overflow-y-auto pr-1 lg:grid-cols-1">
+          {CAMERA_FILTERS.map((filter) => {
+            const isSelected = activeFilter.id === filter.id;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => setActiveFilter(filter)}
+                className={`brutal-btn flex items-center justify-between gap-1.5 px-2.5 py-2 text-left ${isSelected
+                  ? "bg-[#facc15] text-zinc-950"
+                  : "bg-white text-zinc-950 hover:bg-[#fef9c3]"
+                  }`}
+              >
+                <span className="flex items-center gap-1 truncate font-pixel text-[11px] font-bold uppercase">
+                  {isSelected && <Sparkles className="h-3 w-3 shrink-0" />}
+                  <span className="truncate">{filter.name}</span>
+                </span>
+                <span className="shrink-0 border border-zinc-950 bg-zinc-950 px-1 py-0.5 font-mono text-[9px] font-bold uppercase text-white">
+                  {filter.category}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Column 2 (Center): Controls + CRT Camera Viewfinder + Shutter */}
+      <div className="order-1 space-y-3 lg:order-2">
         {/* Grid & Camera Hardware Switches */}
-        <div className="brutal-box flex flex-wrap items-center justify-between gap-3 bg-white p-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 flex items-center gap-1 font-pixel text-xs font-bold uppercase">
+        <div className="brutal-box flex flex-wrap items-center justify-between gap-2 bg-white p-2.5">
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="mr-1 flex items-center gap-1 font-pixel text-[11px] font-bold uppercase">
               <LayoutGrid className="h-3.5 w-3.5" />
               GRID:
             </span>
@@ -840,7 +904,7 @@ export function PhotoBooth() {
                   type="button"
                   disabled={isCapturing}
                   onClick={() => handleSelectLayout(layout)}
-                  className={`brutal-btn px-2.5 py-1 font-pixel text-xs font-bold uppercase ${active
+                  className={`brutal-btn px-2 py-1 font-pixel text-[11px] font-bold uppercase ${active
                     ? "bg-[#22d3ee] text-zinc-950"
                     : "bg-[#fffbeb] text-zinc-800 hover:bg-zinc-100"
                     }`}
@@ -851,23 +915,23 @@ export function PhotoBooth() {
             })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Timer Cycle Toggle: OFF -> 3S -> 5S -> 10S */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Timer Cycle Toggle */}
             <button
               type="button"
               disabled={isCapturing}
               onClick={cycleTimer}
               title="Click to cycle timer: OFF / 3s / 5s / 10s"
-              className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${timerSeconds > 0
+              className={`brutal-btn flex items-center gap-1 px-2 py-1 font-pixel text-[11px] font-bold uppercase ${timerSeconds > 0
                 ? "bg-[#a3e635] text-zinc-950"
                 : "bg-white text-zinc-600"
                 }`}
             >
               <Timer className="h-3.5 w-3.5" />
-              {timerSeconds === 0 ? "NO TIMER" : `${timerSeconds}S`}
+              {timerSeconds === 0 ? "OFF" : `${timerSeconds}S`}
             </button>
 
-            {/* Capture Mode Toggle: SINGLE vs BURST */}
+            {/* Capture Mode Toggle */}
             <button
               type="button"
               disabled={isCapturing}
@@ -877,7 +941,7 @@ export function PhotoBooth() {
                 )
               }
               title="Toggle Single Shot vs Auto-Burst"
-              className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${captureMode === "burst"
+              className={`brutal-btn flex items-center gap-1 px-2 py-1 font-pixel text-[11px] font-bold uppercase ${captureMode === "burst"
                 ? "bg-[#facc15] text-zinc-950"
                 : "bg-white text-zinc-800"
                 }`}
@@ -890,7 +954,7 @@ export function PhotoBooth() {
             <button
               type="button"
               onClick={() => setMirrorView((m) => !m)}
-              className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${mirrorView
+              className={`brutal-btn flex items-center gap-1 px-2 py-1 font-pixel text-[11px] font-bold uppercase ${mirrorView
                 ? "bg-[#a3e635] text-zinc-950"
                 : "bg-white text-zinc-600"
                 }`}
@@ -910,7 +974,7 @@ export function PhotoBooth() {
               title="Switch camera"
               className="brutal-btn bg-white p-1.5 text-zinc-950"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
@@ -919,9 +983,9 @@ export function PhotoBooth() {
         <div className="brutal-box relative overflow-hidden bg-zinc-950">
           <div className="flex items-center justify-between border-b-[3px] border-zinc-950 bg-zinc-900 px-3 py-1.5 text-white">
             <div className="flex items-center gap-1.5">
-              <span className="h-3 w-3 border border-black bg-[#f43f5e]" />
-              <span className="h-3 w-3 border border-black bg-[#facc15]" />
-              <span className="h-3 w-3 border border-black bg-[#a3e635]" />
+              <span className="h-2.5 w-2.5 border border-black bg-[#f43f5e]" />
+              <span className="h-2.5 w-2.5 border border-black bg-[#facc15]" />
+              <span className="h-2.5 w-2.5 border border-black bg-[#a3e635]" />
               <span className="ml-2 font-pixel text-[11px] uppercase tracking-wider text-zinc-300">
                 CAM_FEED // {activeFilter.name}
               </span>
@@ -932,11 +996,11 @@ export function PhotoBooth() {
             </span>
           </div>
 
-          <div className="relative">
+          <div className="relative flex items-center justify-center bg-zinc-950">
             <video ref={videoRef} playsInline muted className="hidden" />
             <canvas
               ref={canvasRef}
-              className="mx-auto aspect-[4/3] max-h-[520px] w-full object-contain"
+              className="aspect-[4/3] max-h-[380px] w-full object-contain"
             />
 
             <div className="crt-scanlines pointer-events-none absolute inset-0" />
@@ -965,64 +1029,14 @@ export function PhotoBooth() {
           </div>
         </div>
 
-        {/* Filter Intensity Bar */}
-        {activeFilter.id !== "normal" &&
-          activeFilter.effect !== "mirror" &&
-          activeFilter.effect !== "duotone" &&
-          activeFilter.effect !== "thermal" && (
-            <div className="brutal-box flex items-center gap-4 bg-white px-4 py-3">
-              <span className="font-pixel text-xs font-bold uppercase whitespace-nowrap">
-                FX POWER:
-              </span>
-              <Slider
-                value={[intensity]}
-                min={10}
-                max={100}
-                step={1}
-                onValueChange={(vals) =>
-                  setIntensity(Array.isArray(vals) ? vals[0] : vals)
-                }
-              />
-              <span className="brutal-btn bg-[#facc15] px-2 py-0.5 font-pixel text-xs font-bold">
-                {intensity}%
-              </span>
-            </div>
-          )}
-
-        {/* Arcade Cartridge Filter Grid */}
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {CAMERA_FILTERS.map((filter) => {
-            const isSelected = activeFilter.id === filter.id;
-            return (
-              <button
-                key={filter.id}
-                type="button"
-                onClick={() => setActiveFilter(filter)}
-                className={`brutal-btn flex flex-col items-start gap-1 p-3 text-left ${isSelected
-                  ? "bg-[#facc15] text-zinc-950"
-                  : "bg-white text-zinc-950 hover:bg-[#fef9c3]"
-                  }`}
-              >
-                <span className="flex items-center gap-1 font-pixel text-xs font-bold uppercase">
-                  {isSelected && <Sparkles className="h-3.5 w-3.5" />}
-                  {filter.name}
-                </span>
-                <span className="border border-zinc-950 bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-white">
-                  {filter.category}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Shutter Button (Adapts label to Single vs Burst mode) */}
+        {/* Shutter Button */}
         <button
           type="button"
           disabled={isCapturing || isGridFull || Boolean(streamError)}
           onClick={handleCapture}
-          className="brutal-btn flex h-16 w-full items-center justify-center gap-3 bg-[#f43f5e] font-pixel text-base font-bold uppercase tracking-wider text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="brutal-btn flex h-14 w-full items-center justify-center gap-3 bg-[#f43f5e] font-pixel text-sm font-bold uppercase tracking-wider text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <Camera className="h-6 w-6" />
+          <Camera className="h-5 w-5" />
           {isCapturing
             ? `SHOOTING SLOT #${nextEmptyIndex + 1}...`
             : isGridFull
@@ -1033,31 +1047,70 @@ export function PhotoBooth() {
         </button>
       </div>
 
-      {/* Right: Photo Print Slot & Export Panel */}
-      <aside className="brutal-box flex flex-col justify-between bg-white p-4">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between border-b-[3px] border-zinc-950 pb-2.5">
-            <h2 className="font-pixel text-sm font-bold uppercase">PRINT SLOT</h2>
-            {filledCount > 0 && (
-              <button
-                type="button"
-                onClick={handleResetAll}
-                className="brutal-btn flex items-center gap-1 bg-zinc-100 px-2 py-1 font-pixel text-[11px] font-bold uppercase"
-              >
-                <Trash2 className="h-3 w-3" />
-                RESET ALL
-              </button>
-            )}
-          </div>
-
-          {/* Individual Slot Manager */}
+      {/* Column 3 (Right): Live Print Preview AT TOP + Customization Below */}
+      {/* Column 3 (Right): Live Print Preview + Stickers + Compact Customizer */}
+      <aside className="brutal-box order-3 space-y-2.5 bg-white p-3.5">
+        <div className="flex items-center justify-between border-b-[3px] border-zinc-950 pb-2">
+          <h2 className="font-pixel text-xs font-bold uppercase">PRINT SLOT</h2>
           {filledCount > 0 && (
-            <div className="space-y-1.5">
-              <p className="font-pixel text-[11px] font-bold uppercase text-zinc-700">
-                SHOT SLOTS (CLICK ✕ TO RETAKE ONE):
+            <button
+              type="button"
+              onClick={handleResetAll}
+              className="brutal-btn flex items-center gap-1 bg-zinc-100 px-2 py-1 font-pixel text-[10px] font-bold uppercase"
+            >
+              <Trash2 className="h-3 w-3" />
+              RESET ALL
+            </button>
+          )}
+        </div>
+
+        {/* 1. Final Printed Collage Preview */}
+        <div className="flex min-h-[200px] items-center justify-center border-[3px] border-dashed border-zinc-950 bg-[#fffbeb] p-2.5">
+          {finalOutput ? (
+            <div
+              ref={previewContainerRef}
+              onPointerMove={handlePointerMove}
+              onPointerUp={() => setDraggingId(null)}
+              onPointerLeave={() => setDraggingId(null)}
+              className="relative inline-block touch-none select-none"
+            >
+              <img
+                src={finalOutput}
+                alt="Captured grid collage"
+                draggable={false}
+                className="max-h-[280px] border-[3px] border-zinc-950 shadow-[4px_4px_0px_#09090b]"
+              />
+              {stickers.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    setDraggingId(s.id);
+                  }}
+                  onDoubleClick={() =>
+                    setStickers((prev) =>
+                      prev.filter((item) => item.id !== s.id)
+                    )
+                  }
+                  title="Drag to move • Double-click to remove"
+                  style={{
+                    left: `${s.x * 100}%`,
+                    top: `${s.y * 100}%`,
+                    width: "48px",
+                    height: "48px",
+                  }}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border border-dashed border-transparent hover:border-zinc-950/50 active:cursor-grabbing"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="w-full space-y-2 text-center">
+              <p className="font-pixel text-[11px] text-zinc-500">
+                SHOOT SLOT #{nextEmptyIndex + 1} OF {selectedLayout.totalShots}
               </p>
               <div
-                className="grid gap-1.5"
+                className="mx-auto grid max-w-[230px] gap-1.5"
                 style={{
                   gridTemplateColumns: `repeat(${selectedLayout.cols}, minmax(0, 1fr))`,
                 }}
@@ -1065,7 +1118,7 @@ export function PhotoBooth() {
                 {slots.map((shot, idx) => (
                   <div
                     key={idx}
-                    className="relative flex aspect-[4/3] items-center justify-center overflow-hidden border-2 border-zinc-950 bg-[#fffbeb] font-pixel text-[11px] font-bold text-zinc-500"
+                    className="relative flex aspect-[4/3] items-center justify-center overflow-hidden border-2 border-zinc-950 bg-white font-pixel text-[10px] font-bold text-zinc-400"
                   >
                     {shot ? (
                       <>
@@ -1077,159 +1130,62 @@ export function PhotoBooth() {
                         <button
                           type="button"
                           onClick={() => handleDeleteSlot(idx)}
-                          title={`Delete shot #${idx + 1} to retake`}
-                          className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center border-2 border-zinc-950 bg-[#f43f5e] text-white shadow-[2px_2px_0px_#09090b] hover:bg-red-600"
+                          title={`Delete shot #${idx + 1}`}
+                          className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center border border-zinc-950 bg-[#f43f5e] text-white"
                         >
-                          <X className="h-3.5 w-3.5 stroke-[3]" />
+                          <X className="h-3 w-3 stroke-[3]" />
                         </button>
                       </>
                     ) : (
-                      `EMPTY #${idx + 1}`
+                      `#${idx + 1}`
                     )}
                   </div>
                 ))}
               </div>
             </div>
           )}
+        </div>
 
-          {/* Frame Style Picker */}
-          <div className="space-y-2">
-            <p className="font-pixel text-xs font-bold uppercase">FRAME STYLE:</p>
-            <div className="grid grid-cols-2 gap-2">
-              {FRAME_STYLES.map((st) => {
-                const active = frameStyle.id === st.id;
-                return (
-                  <button
-                    key={st.id}
-                    type="button"
-                    onClick={() => setFrameStyle(st)}
-                    className={`brutal-btn px-2.5 py-2 text-left font-pixel text-xs font-bold ${active ? "bg-[#facc15] text-zinc-950" : "bg-white"
-                      }`}
-                  >
-                    {st.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Optional Custom PNG Frame Overlay Upload */}
-            <div className="flex items-center gap-2 pt-1">
-              <label className="brutal-btn flex flex-1 cursor-pointer items-center justify-center bg-[#fffbeb] py-1.5 font-pixel text-[11px] font-bold uppercase hover:bg-[#fef08a]">
-                {customFrameOverlay
-                  ? "CHANGE PNG FRAME"
-                  : "+ PNG FRAME OVERLAY"}
-                <input
-                  type="file"
-                  accept="image/png,image/webp"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      if (typeof reader.result === "string") {
-                        setCustomFrameOverlay(reader.result);
-                      }
-                    };
-                    reader.readAsDataURL(file);
-                    e.target.value = "";
-                  }}
-                  className="hidden"
-                />
-              </label>
-              {customFrameOverlay && (
+        {/* 2. PNG Sticker Stamp Bar (Right Below Preview — Zero Scrolling!) */}
+        {finalOutput && (
+          <div className="space-y-1.5 border-2 border-zinc-950 bg-[#fffbeb] p-2">
+            <div className="flex items-center justify-between">
+              <span className="font-pixel text-[10px] font-bold uppercase">
+                STICKERS (DRAG / DBL-CLICK DEL):
+              </span>
+              {stickers.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setCustomFrameOverlay(null)}
-                  className="brutal-btn bg-[#f43f5e] px-2.5 py-1.5 font-pixel text-[11px] font-bold text-white"
+                  onClick={() => setStickers([])}
+                  className="font-pixel text-[10px] font-bold text-[#f43f5e] underline"
                 >
-                  ✕
+                  CLEAR
                 </button>
               )}
             </div>
-          </div>
 
-          {/* Frame Paper Color & Pattern Picker */}
-          <div className="space-y-2">
-            <p className="font-pixel text-xs font-bold uppercase">PAPER THEME:</p>
-            <div className="grid max-h-40 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
-              {FRAME_THEMES.map((theme) => {
-                const selected = frameTheme.id === theme.id;
-                return (
-                  <button
-                    key={theme.id}
-                    type="button"
-                    onClick={() => setFrameTheme(theme)}
-                    className={`brutal-btn flex items-center gap-2 px-2.5 py-1.5 font-pixel text-xs font-bold ${selected ? "bg-[#22d3ee]" : "bg-white"
-                      }`}
-                  >
-                    <span
-                      className="h-4 w-4 shrink-0 border-2 border-zinc-950"
-                      style={{
-                        backgroundColor: theme.bg,
-                        backgroundImage: theme.swatch,
-                        backgroundSize: "8px 8px",
-                      }}
-                    />
-                    <span className="truncate">{theme.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            <div className="flex items-center gap-1.5">
+              {BUILTIN_PNG_STICKERS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => addPngSticker(item.src)}
+                  className="brutal-btn flex h-9 flex-1 items-center justify-center bg-white p-1 hover:bg-[#fef08a]"
+                  title={item.label}
+                >
+                  <img
+                    src={item.src}
+                    alt={item.label}
+                    className="h-6 w-6 object-contain"
+                  />
+                </button>
+              ))}
 
-          {/* Custom Frame Caption Input */}
-          <div className="space-y-1.5">
-            <label className="block font-pixel text-xs font-bold uppercase">
-              FRAME TEXT:
-            </label>
-            <input
-              type="text"
-              maxLength={28}
-              value={customCaption}
-              onChange={(e) => setCustomCaption(e.target.value)}
-              placeholder="TYPE YOUR CAPTION..."
-              className="w-full border-[2.5px] border-zinc-950 bg-[#fffbeb] px-3 py-1.5 font-mono text-xs font-bold uppercase focus:bg-[#fef08a] focus:outline-none"
-            />
-          </div>
-
-          {/* PNG Sticker Stamp Bar */}
-          {finalOutput && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-pixel text-xs font-bold uppercase">
-                  PNG STICKERS (DRAG / DBL-CLICK DEL):
-                </span>
-                {stickers.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setStickers([])}
-                    className="font-pixel text-[10px] font-bold text-[#f43f5e] underline"
-                  >
-                    CLEAR
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-4 gap-1.5">
-                {BUILTIN_PNG_STICKERS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => addPngSticker(item.src)}
-                    className="brutal-btn flex h-12 items-center justify-center bg-white p-1.5 hover:bg-[#fef08a]"
-                    title={item.label}
-                  >
-                    <img
-                      src={item.src}
-                      alt={item.label}
-                      className="h-8 w-8 object-contain"
-                    />
-                  </button>
-                ))}
-              </div>
-
-              <label className="brutal-btn flex w-full cursor-pointer items-center justify-center gap-2 bg-[#22d3ee] py-2 font-pixel text-xs font-bold uppercase text-zinc-950">
-                + UPLOAD CUSTOM PNG
+              <label
+                title="Upload Custom PNG Sticker"
+                className="brutal-btn flex h-9 cursor-pointer items-center justify-center bg-[#22d3ee] px-2.5 font-pixel text-[10px] font-bold uppercase text-zinc-950"
+              >
+                + PNG
                 <input
                   type="file"
                   accept="image/png,image/webp,image/gif"
@@ -1237,92 +1193,207 @@ export function PhotoBooth() {
                   className="hidden"
                 />
               </label>
-
-              {stickers.length > 0 && (
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="font-pixel text-[10px] font-bold uppercase">
-                    SIZE:
-                  </span>
-                  <input
-                    type="range"
-                    min={60}
-                    max={360}
-                    value={stickers[stickers.length - 1].size}
-                    onChange={(e) => {
-                      const nextSize = Number(e.target.value);
-                      setStickers((prev) =>
-                        prev.map((st, idx) =>
-                          idx === prev.length - 1
-                            ? { ...st, size: nextSize }
-                            : st
-                        )
-                      );
-                    }}
-                    className="w-full accent-zinc-950"
-                  />
-                </div>
-              )}
             </div>
-          )}
 
-          {/* Final Printed Collage Preview */}
-          <div className="flex min-h-[260px] items-center justify-center border-[3px] border-dashed border-zinc-950 bg-[#fffbeb] p-3">
-            {finalOutput ? (
-              <div
-                ref={previewContainerRef}
-                onPointerMove={handlePointerMove}
-                onPointerUp={() => setDraggingId(null)}
-                onPointerLeave={() => setDraggingId(null)}
-                className="relative inline-block touch-none select-none"
-              >
-                <img
-                  src={finalOutput}
-                  alt="Captured grid collage"
-                  draggable={false}
-                  className="max-h-[450px] border-[3px] border-zinc-950 shadow-[4px_4px_0px_#09090b]"
-                />
-                {stickers.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      setDraggingId(s.id);
-                    }}
-                    onDoubleClick={() =>
-                      setStickers((prev) =>
-                        prev.filter((item) => item.id !== s.id)
+            {stickers.length > 0 && (
+              <div className="flex items-center gap-2 pt-0.5">
+                <span className="font-pixel text-[10px] font-bold uppercase">
+                  SIZE:
+                </span>
+                <input
+                  type="range"
+                  min={60}
+                  max={360}
+                  value={stickers[stickers.length - 1].size}
+                  onChange={(e) => {
+                    const nextSize = Number(e.target.value);
+                    setStickers((prev) =>
+                      prev.map((st, idx) =>
+                        idx === prev.length - 1
+                          ? { ...st, size: nextSize }
+                          : st
                       )
-                    }
-                    title="Drag to move • Double-click to remove"
-                    style={{
-                      left: `${s.x * 100}%`,
-                      top: `${s.y * 100}%`,
-                      width: "56px",
-                      height: "56px",
-                    }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border border-dashed border-transparent hover:border-zinc-950/50 active:cursor-grabbing"
-                  />
-                ))}
+                    );
+                  }}
+                  className="w-full accent-zinc-950"
+                />
               </div>
-            ) : (
-              <p className="text-center font-pixel text-xs leading-relaxed text-zinc-500">
-                PRESS CAPTURE TO SHOOT SLOT #{nextEmptyIndex + 1} OF{" "}
-                {selectedLayout.totalShots}
-              </p>
             )}
           </div>
-        </div>
+        )}
 
+        {/* 3. Save PNG Button */}
         <button
           type="button"
           disabled={!finalOutput}
           onClick={downloadImage}
-          className="brutal-btn mt-4 flex h-12 w-full items-center justify-center gap-2 bg-[#a3e635] font-pixel text-xs font-bold uppercase text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
+          className="brutal-btn flex h-10 w-full items-center justify-center gap-2 bg-[#a3e635] font-pixel text-xs font-bold uppercase text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Download className="h-4 w-4" />
           SAVE PNG ({selectedLayout.id})
         </button>
+
+        {/* 4. Compact 2-Column Frame Style & Paper Theme Selectors */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <label
+              htmlFor="frame-style-select"
+              className="block font-pixel text-[10px] font-bold uppercase"
+            >
+              FRAME STYLE:
+            </label>
+            <select
+              id="frame-style-select"
+              value={frameStyle.id}
+              onChange={(e) => {
+                const found = FRAME_STYLES.find(
+                  (st) => st.id === e.target.value
+                );
+                if (found) setFrameStyle(found);
+              }}
+              className="brutal-btn h-8 w-full cursor-pointer bg-[#facc15] px-2 font-pixel text-[10px] font-bold uppercase text-zinc-950 focus:outline-none"
+            >
+              {FRAME_STYLES.map((st) => (
+                <option
+                  key={st.id}
+                  value={st.id}
+                  className="bg-white text-zinc-950"
+                >
+                  {st.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor="paper-theme-select"
+              className="block font-pixel text-[10px] font-bold uppercase"
+            >
+              PAPER THEME:
+            </label>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="h-8 w-8 shrink-0 border-2 border-zinc-950"
+                title={frameTheme.label}
+                style={{
+                  backgroundColor: frameTheme.bg,
+                  backgroundImage: frameTheme.swatch,
+                  backgroundSize: "8px 8px",
+                }}
+              />
+              <select
+                id="paper-theme-select"
+                value={frameTheme.id}
+                onChange={(e) => {
+                  const found = FRAME_THEMES.find(
+                    (t) => t.id === e.target.value
+                  );
+                  if (found) setFrameTheme(found);
+                }}
+                className="brutal-btn h-8 w-full cursor-pointer bg-white px-2 font-pixel text-[10px] font-bold uppercase text-zinc-950 focus:bg-[#22d3ee] focus:outline-none"
+              >
+                {FRAME_THEMES.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Custom Frame Text + PNG Overlay Row */}
+        <div className="grid grid-cols-[1fr_auto] items-end gap-1.5">
+          <div className="space-y-1">
+            <label className="block font-pixel text-[10px] font-bold uppercase">
+              FRAME TEXT:
+            </label>
+            <input
+              type="text"
+              maxLength={28}
+              value={customCaption}
+              onChange={(e) => setCustomCaption(e.target.value)}
+              placeholder="CAPTION..."
+              className="h-8 w-full border-2 border-zinc-950 bg-[#fffbeb] px-2 font-mono text-xs font-bold uppercase focus:bg-[#fef08a] focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-1">
+            <label
+              title="Upload Custom PNG Frame Overlay"
+              className="brutal-btn flex h-8 cursor-pointer items-center justify-center bg-[#fffbeb] px-2 font-pixel text-[10px] font-bold uppercase hover:bg-[#fef08a]"
+            >
+              {customFrameOverlay ? "PNG ✓" : "+ FRAME"}
+              <input
+                type="file"
+                accept="image/png,image/webp"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    if (typeof reader.result === "string") {
+                      setCustomFrameOverlay(reader.result);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                  e.target.value = "";
+                }}
+                className="hidden"
+              />
+            </label>
+            {customFrameOverlay && (
+              <button
+                type="button"
+                onClick={() => setCustomFrameOverlay(null)}
+                className="brutal-btn flex h-8 items-center justify-center bg-[#f43f5e] px-2 font-pixel text-[10px] font-bold text-white"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 6. Individual Slot Manager when Grid is Full */}
+        {finalOutput && (
+          <div className="space-y-1">
+            <p className="font-pixel text-[10px] font-bold uppercase text-zinc-700">
+              RETAKE A SLOT (CLICK ✕):
+            </p>
+            <div
+              className="grid gap-1.5"
+              style={{
+                gridTemplateColumns: `repeat(${selectedLayout.cols}, minmax(0, 1fr))`,
+              }}
+            >
+              {slots.map((shot, idx) => (
+                <div
+                  key={idx}
+                  className="relative flex aspect-[4/3] items-center justify-center overflow-hidden border-2 border-zinc-950 bg-[#fffbeb]"
+                >
+                  {shot && (
+                    <>
+                      <img
+                        src={shot}
+                        alt={`Slot ${idx + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSlot(idx)}
+                        title={`Delete shot #${idx + 1}`}
+                        className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center border border-zinc-950 bg-[#f43f5e] text-white"
+                      >
+                        <X className="h-3 w-3 stroke-[3]" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
     </div>
   );
