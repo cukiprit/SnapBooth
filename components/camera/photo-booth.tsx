@@ -18,14 +18,8 @@ import { CAMERA_FILTERS, type CameraFilter } from "@/lib/filters";
 import { GRID_LAYOUTS, type GridLayout } from "@/lib/grid-layouts";
 import { FRAME_STYLES, type FrameStyle } from "@/lib/frame-styles";
 
-const FRAME_THEMES = [
-  { id: "classic-white", label: "WHITE", bg: "#ffffff", text: "#09090b" },
-  { id: "midnight-black", label: "VOID", bg: "#09090b", text: "#facc15" },
-  { id: "sakura-pink", label: "PINK", bg: "#fbcfe8", text: "#831843" },
-  { id: "arcade-yellow", label: "CYBER", bg: "#fef08a", text: "#09090b" },
-];
-
 const TIMER_OPTIONS = [0, 3, 5, 10] as const;
+const CELL_ASPECT = 4 / 3;
 type TimerDuration = (typeof TIMER_OPTIONS)[number];
 
 const BUILTIN_PNG_STICKERS = [
@@ -35,12 +29,107 @@ const BUILTIN_PNG_STICKERS = [
   { id: "web", label: "Web", src: "/stickers/web.png" },
 ];
 
+interface FrameTheme {
+  id: string;
+  label: string;
+  bg: string;
+  text: string;
+  swatch?: string; // Optional CSS preview for patterned swatches
+  pattern?: "grid" | "dots" | "gingham" | "stripes";
+  patternColor?: string;
+}
+
+const FRAME_THEMES: FrameTheme[] = [
+  // Classic & Arcade Solids
+  { id: "classic-white", label: "WHITE", bg: "#ffffff", text: "#09090b" },
+  { id: "midnight-black", label: "VOID", bg: "#09090b", text: "#facc15" },
+  { id: "arcade-yellow", label: "CYBER", bg: "#fef08a", text: "#09090b" },
+  { id: "sakura-pink", label: "PINK", bg: "#fbcfe8", text: "#831843" },
+
+  // Retro & Pastel Solids
+  { id: "mint-soda", label: "MINT", bg: "#bbf7d0", text: "#064e3b" },
+  { id: "sky-pixel", label: "SKY", bg: "#bae6fd", text: "#0c4a6e" },
+  { id: "lavender-pop", label: "LILAC", bg: "#e9d5ff", text: "#4c1d95" },
+  { id: "peach-cream", label: "PEACH", bg: "#fed7aa", text: "#7c2d12" },
+  { id: "warm-cream", label: "CREAM", bg: "#fef3c7", text: "#451a03" },
+  { id: "hot-crimson", label: "RED", bg: "#f43f5e", text: "#ffffff" },
+
+  // Patterned Papers
+  {
+    id: "grid-note",
+    label: "GRID",
+    bg: "#ffffff",
+    text: "#1e3a8a",
+    pattern: "grid",
+    patternColor: "#bfdbfe",
+    swatch:
+      "linear-gradient(#bfdbfe 1px, transparent 1px), linear-gradient(90deg, #bfdbfe 1px, #ffffff 1px)",
+  },
+  {
+    id: "polka-dot",
+    label: "DOTS",
+    bg: "#fffbeb",
+    text: "#09090b",
+    pattern: "dots",
+    patternColor: "#f43f5e",
+    swatch: "radial-gradient(#f43f5e 2px, #fffbeb 2px)",
+  },
+  {
+    id: "pink-gingham",
+    label: "PICNIC",
+    bg: "#fff1f2",
+    text: "#881337",
+    pattern: "gingham",
+    patternColor: "rgba(244, 63, 94, 0.22)",
+    swatch:
+      "repeating-linear-gradient(0deg, rgba(244,63,94,0.25) 0 4px, transparent 4px 8px), repeating-linear-gradient(90deg, rgba(244,63,94,0.25) 0 4px, #fff1f2 4px 8px)",
+  },
+  {
+    id: "hazard-stripe",
+    label: "HAZARD",
+    bg: "#facc15",
+    text: "#09090b",
+    pattern: "stripes",
+    patternColor: "#09090b",
+    swatch:
+      "repeating-linear-gradient(-45deg, #facc15 0 4px, #09090b 4px 7px)",
+  },
+];
+
 interface PlacedSticker {
   id: string;
   src: string;
   x: number;
   y: number;
   size: number;
+}
+
+function drawCroppedSource(
+  ctx: CanvasRenderingContext2D,
+  source: HTMLVideoElement | HTMLImageElement,
+  srcW: number,
+  srcH: number,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number
+) {
+  const srcAspect = srcW / srcH;
+  const dstAspect = dw / dh;
+  let sx = 0;
+  let sy = 0;
+  let sw = srcW;
+  let sh = srcH;
+
+  if (srcAspect > dstAspect) {
+    sw = srcH * dstAspect;
+    sx = (srcW - sw) / 2;
+  } else {
+    sh = srcW / dstAspect;
+    sy = (srcH - sh) / 2;
+  }
+
+  ctx.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
 export function PhotoBooth() {
@@ -71,7 +160,7 @@ export function PhotoBooth() {
 
   // Frame Style, Paper Color, Optional PNG Overlay & Caption
   const [frameStyle, setFrameStyle] = useState<FrameStyle>(FRAME_STYLES[0]);
-  const [frameTheme, setFrameTheme] = useState(FRAME_THEMES[0]);
+  const [frameTheme, setFrameTheme] = useState<FrameTheme>(FRAME_THEMES[0]);
   const [customFrameOverlay, setCustomFrameOverlay] = useState<string | null>(null);
   const [customCaption, setCustomCaption] = useState("SNAPBOOTH.EXE");
 
@@ -164,46 +253,52 @@ export function PhotoBooth() {
       if (video && canvas && video.readyState >= 2) {
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
         if (ctx) {
-          const w = video.videoWidth || 640;
-          const h = video.videoHeight || 480;
-          if (canvas.width !== w || canvas.height !== h) {
-            canvas.width = w;
-            canvas.height = h;
+          const vw = video.videoWidth || 1280;
+          const vh = video.videoHeight || 720;
+
+          // Match the exact 4:3 framing used by the print collage cells
+          const outH = vh;
+          const outW = Math.round(vh * CELL_ASPECT);
+
+          if (canvas.width !== outW || canvas.height !== outH) {
+            canvas.width = outW;
+            canvas.height = outH;
           }
 
           ctx.save();
           ctx.filter = activeFilter.cssFilter(intensity);
 
           if (mirrorView && facingMode === "user") {
-            ctx.translate(w, 0);
+            ctx.translate(outW, 0);
             ctx.scale(-1, 1);
           }
 
-          ctx.drawImage(video, 0, 0, w, h);
+          // Center-crop the 16:9 webcam stream into the 4:3 canvas
+          drawCroppedSource(ctx, video, vw, vh, 0, 0, outW, outH);
           ctx.restore();
 
           if (activeFilter.effect === "mirror") {
-            const halfW = Math.floor(w / 2);
-            const leftHalf = ctx.getImageData(0, 0, halfW, h);
+            const halfW = Math.floor(outW / 2);
+            const leftHalf = ctx.getImageData(0, 0, halfW, outH);
             ctx.save();
-            ctx.translate(w, 0);
+            ctx.translate(outW, 0);
             ctx.scale(-1, 1);
             const tempCanvas = document.createElement("canvas");
             tempCanvas.width = halfW;
-            tempCanvas.height = h;
+            tempCanvas.height = outH;
             tempCanvas.getContext("2d")?.putImageData(leftHalf, 0, 0);
             ctx.drawImage(tempCanvas, 0, 0);
             ctx.restore();
           } else if (activeFilter.effect === "pixelate") {
             const blockSize = Math.max(4, Math.floor((intensity / 100) * 24));
-            const smallW = Math.max(1, Math.floor(w / blockSize));
-            const smallH = Math.max(1, Math.floor(h / blockSize));
+            const smallW = Math.max(1, Math.floor(outW / blockSize));
+            const smallH = Math.max(1, Math.floor(outH / blockSize));
             ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(canvas, 0, 0, w, h, 0, 0, smallW, smallH);
-            ctx.drawImage(canvas, 0, 0, smallW, smallH, 0, 0, w, h);
+            ctx.drawImage(canvas, 0, 0, outW, outH, 0, 0, smallW, smallH);
+            ctx.drawImage(canvas, 0, 0, smallW, smallH, 0, 0, outW, outH);
             ctx.imageSmoothingEnabled = true;
           } else if (activeFilter.effect === "duotone") {
-            const imgData = ctx.getImageData(0, 0, w, h);
+            const imgData = ctx.getImageData(0, 0, outW, outH);
             const data = imgData.data;
             for (let i = 0; i < data.length; i += 4) {
               const lum =
@@ -213,6 +308,86 @@ export function PhotoBooth() {
               data[i + 2] = lum < 128 ? 220 - lum : 40;
             }
             ctx.putImageData(imgData, 0, 0);
+          } else if (activeFilter.effect === "crt") {
+            // Horizontal scanlines + subtle vignette
+            const lineAlpha = (intensity / 100) * 0.35;
+            ctx.fillStyle = `rgba(9, 9, 11, ${lineAlpha})`;
+            for (let y = 0; y < outH; y += 4) {
+              ctx.fillRect(0, y, outW, 2);
+            }
+          } else if (activeFilter.effect === "vhs") {
+            // RGB chromatic channel shift
+            const shift = Math.max(2, Math.round((intensity / 100) * 14));
+            const imgData = ctx.getImageData(0, 0, outW, outH);
+            const src = new Uint8ClampedArray(imgData.data);
+            const dst = imgData.data;
+
+            for (let y = 0; y < outH; y++) {
+              for (let x = 0; x < outW; x++) {
+                const idx = (y * outW + x) * 4;
+                const leftX = Math.max(0, x - shift);
+                const rightX = Math.min(outW - 1, x + shift);
+                dst[idx] = src[(y * outW + leftX) * 4]; // Red shifted left
+                dst[idx + 2] = src[(y * outW + rightX) * 4 + 2]; // Blue shifted right
+              }
+            }
+            ctx.putImageData(imgData, 0, 0);
+          } else if (activeFilter.effect === "thermal") {
+            // Predator-style heat map palette
+            const imgData = ctx.getImageData(0, 0, outW, outH);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+              const lum =
+                (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) /
+                255;
+              if (lum < 0.25) {
+                data[i] = 20;
+                data[i + 1] = 10;
+                data[i + 2] = Math.round(lum * 4 * 220);
+              } else if (lum < 0.5) {
+                const t = (lum - 0.25) * 4;
+                data[i] = Math.round(t * 220);
+                data[i + 1] = 20;
+                data[i + 2] = Math.round((1 - t) * 220);
+              } else if (lum < 0.75) {
+                const t = (lum - 0.5) * 4;
+                data[i] = 250;
+                data[i + 1] = Math.round(t * 220);
+                data[i + 2] = 10;
+              } else {
+                const t = (lum - 0.75) * 4;
+                data[i] = 255;
+                data[i + 1] = 240;
+                data[i + 2] = Math.round(t * 255);
+              }
+            }
+            ctx.putImageData(imgData, 0, 0);
+          } else if (activeFilter.effect === "halftone") {
+            // Comic/Manga dot grid based on pixel brightness
+            const step = Math.max(6, Math.round(14 - (intensity / 100) * 6));
+            const imgData = ctx.getImageData(0, 0, outW, outH);
+            const data = imgData.data;
+
+            ctx.fillStyle = "#fffbeb";
+            ctx.fillRect(0, 0, outW, outH);
+            ctx.fillStyle = "#09090b";
+
+            for (let y = 0; y < outH; y += step) {
+              for (let x = 0; x < outW; x += step) {
+                const idx = (y * outW + x) * 4;
+                const lum =
+                  (0.299 * data[idx] +
+                    0.587 * data[idx + 1] +
+                    0.114 * data[idx + 2]) /
+                  255;
+                const radius = ((1 - lum) * step) / 2;
+                if (radius > 0.6) {
+                  ctx.beginPath();
+                  ctx.arc(x + step / 2, y + step / 2, radius, 0, Math.PI * 2);
+                  ctx.fill();
+                }
+              }
+            }
           }
         }
       }
@@ -225,13 +400,13 @@ export function PhotoBooth() {
     };
   }, [activeFilter, intensity, mirrorView, facingMode]);
 
-  // 3. Dynamic Grid Collage + Frame Style + Caption + PNG Stickers Compositor
+  // 3. Dynamic Grid Collage + Frame Style + Paper Patterns + Caption + PNG Stickers Compositor
   const buildGridCollage = useCallback(
     async (
       shots: string[],
       layout: GridLayout,
       style: FrameStyle,
-      theme: (typeof FRAME_THEMES)[number],
+      theme: FrameTheme,
       overlaySrc: string | null,
       caption: string,
       placedStickers: PlacedSticker[]
@@ -253,7 +428,7 @@ export function PhotoBooth() {
       const ctx = collageCanvas.getContext("2d");
       if (!ctx) return;
 
-      // A. Frame Background & Decorative Procedural Border
+      // A1. Base Paper Color
       const isFilm = style.id === "film-strip";
       const bg = isFilm ? "#18181b" : theme.bg;
       const fg = isFilm ? "#fafafa" : theme.text;
@@ -261,6 +436,74 @@ export function PhotoBooth() {
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
 
+      // A2. Patterned Paper Textures (Grid, Dots, Gingham, Hazard Stripes)
+      if (!isFilm && theme.pattern) {
+        const pColor = theme.patternColor ?? "rgba(9, 9, 11, 0.15)";
+
+        if (theme.pattern === "grid") {
+          ctx.strokeStyle = pColor;
+          ctx.lineWidth = 2;
+          const step = 28;
+          for (let x = 0; x < collageCanvas.width; x += step) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, collageCanvas.height);
+            ctx.stroke();
+          }
+          for (let y = 0; y < collageCanvas.height; y += step) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(collageCanvas.width, y);
+            ctx.stroke();
+          }
+        } else if (theme.pattern === "dots") {
+          ctx.fillStyle = pColor;
+          const spacing = 30;
+          for (let y = 15; y < collageCanvas.height; y += spacing) {
+            for (let x = 15; x < collageCanvas.width; x += spacing) {
+              ctx.beginPath();
+              ctx.arc(x, y, 4, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        } else if (theme.pattern === "gingham") {
+          ctx.fillStyle = pColor;
+          const size = 28;
+          for (let y = 0; y < collageCanvas.height; y += size * 2) {
+            ctx.fillRect(0, y, collageCanvas.width, size);
+          }
+          for (let x = 0; x < collageCanvas.width; x += size * 2) {
+            ctx.fillRect(x, 0, size, collageCanvas.height);
+          }
+        } else if (theme.pattern === "stripes") {
+          ctx.save();
+          ctx.strokeStyle = pColor;
+          ctx.lineWidth = 14;
+          const step = 36;
+          for (
+            let i = -collageCanvas.height;
+            i < collageCanvas.width + collageCanvas.height;
+            i += step
+          ) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i - collageCanvas.height, collageCanvas.height);
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          // Solid inner backing behind photos & caption so hazard stripes frame the edges cleanly
+          ctx.fillStyle = theme.bg;
+          ctx.fillRect(
+            24,
+            24,
+            collageCanvas.width - 48,
+            collageCanvas.height - 48
+          );
+        }
+      }
+
+      // A3. Decorative Frame Borders
       if (style.id === "checkerboard") {
         const sq = 16;
         ctx.fillStyle = "#09090b";
@@ -341,22 +584,7 @@ export function PhotoBooth() {
         const dx = padding + c * (cellW + gap);
         const dy = padding + r * (cellH + gap);
 
-        const srcAspect = img.width / img.height;
-        const dstAspect = cellW / cellH;
-        let sx = 0;
-        let sy = 0;
-        let sw = img.width;
-        let sh = img.height;
-
-        if (srcAspect > dstAspect) {
-          sw = img.height * dstAspect;
-          sx = (img.width - sw) / 2;
-        } else {
-          sh = img.width / dstAspect;
-          sy = (img.height - sh) / 2;
-        }
-
-        ctx.drawImage(img, sx, sy, sw, sh, dx, dy, cellW, cellH);
+        drawCroppedSource(ctx, img, img.width, img.height, dx, dy, cellW, cellH);
 
         ctx.strokeStyle = isFilm ? "#fafafa" : "#09090b";
         ctx.lineWidth = 4;
@@ -490,14 +718,12 @@ export function PhotoBooth() {
     setIsCapturing(true);
 
     try {
-      // Find all currently empty slot indices
       const emptyIndices = slots
         .map((val, idx) => (val === null ? idx : -1))
         .filter((idx) => idx !== -1);
 
       if (emptyIndices.length === 0) return;
 
-      // Single mode shoots only the first empty slot; Burst mode fills every empty slot
       const targets =
         captureMode === "single" ? [emptyIndices[0]] : emptyIndices;
 
@@ -507,7 +733,6 @@ export function PhotoBooth() {
         if (timerSeconds > 0) {
           await runCountdown(timerSeconds);
         } else if (i > 0) {
-          // Brief 1s breathing room between burst shots when timer is OFF
           await runCountdown(1);
         }
 
@@ -616,8 +841,8 @@ export function PhotoBooth() {
                   disabled={isCapturing}
                   onClick={() => handleSelectLayout(layout)}
                   className={`brutal-btn px-2.5 py-1 font-pixel text-xs font-bold uppercase ${active
-                      ? "bg-[#22d3ee] text-zinc-950"
-                      : "bg-[#fffbeb] text-zinc-800 hover:bg-zinc-100"
+                    ? "bg-[#22d3ee] text-zinc-950"
+                    : "bg-[#fffbeb] text-zinc-800 hover:bg-zinc-100"
                     }`}
                 >
                   {layout.id}
@@ -634,8 +859,8 @@ export function PhotoBooth() {
               onClick={cycleTimer}
               title="Click to cycle timer: OFF / 3s / 5s / 10s"
               className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${timerSeconds > 0
-                  ? "bg-[#a3e635] text-zinc-950"
-                  : "bg-white text-zinc-600"
+                ? "bg-[#a3e635] text-zinc-950"
+                : "bg-white text-zinc-600"
                 }`}
             >
               <Timer className="h-3.5 w-3.5" />
@@ -653,8 +878,8 @@ export function PhotoBooth() {
               }
               title="Toggle Single Shot vs Auto-Burst"
               className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${captureMode === "burst"
-                  ? "bg-[#facc15] text-zinc-950"
-                  : "bg-white text-zinc-800"
+                ? "bg-[#facc15] text-zinc-950"
+                : "bg-white text-zinc-800"
                 }`}
             >
               <Zap className="h-3.5 w-3.5" />
@@ -666,8 +891,8 @@ export function PhotoBooth() {
               type="button"
               onClick={() => setMirrorView((m) => !m)}
               className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${mirrorView
-                  ? "bg-[#a3e635] text-zinc-950"
-                  : "bg-white text-zinc-600"
+                ? "bg-[#a3e635] text-zinc-950"
+                : "bg-white text-zinc-600"
                 }`}
             >
               <FlipHorizontal className="h-3.5 w-3.5" />
@@ -709,7 +934,10 @@ export function PhotoBooth() {
 
           <div className="relative">
             <video ref={videoRef} playsInline muted className="hidden" />
-            <canvas ref={canvasRef} className="aspect-video w-full object-cover" />
+            <canvas
+              ref={canvasRef}
+              className="mx-auto aspect-[4/3] max-h-[520px] w-full object-contain"
+            />
 
             <div className="crt-scanlines pointer-events-none absolute inset-0" />
             <div className="pointer-events-none absolute top-3 left-3 h-5 w-5 border-t-[3px] border-l-[3px] border-[#facc15]" />
@@ -740,7 +968,8 @@ export function PhotoBooth() {
         {/* Filter Intensity Bar */}
         {activeFilter.id !== "normal" &&
           activeFilter.effect !== "mirror" &&
-          activeFilter.effect !== "duotone" && (
+          activeFilter.effect !== "duotone" &&
+          activeFilter.effect !== "thermal" && (
             <div className="brutal-box flex items-center gap-4 bg-white px-4 py-3">
               <span className="font-pixel text-xs font-bold uppercase whitespace-nowrap">
                 FX POWER:
@@ -770,8 +999,8 @@ export function PhotoBooth() {
                 type="button"
                 onClick={() => setActiveFilter(filter)}
                 className={`brutal-btn flex flex-col items-start gap-1 p-3 text-left ${isSelected
-                    ? "bg-[#facc15] text-zinc-950"
-                    : "bg-white text-zinc-950 hover:bg-[#fef9c3]"
+                  ? "bg-[#facc15] text-zinc-950"
+                  : "bg-white text-zinc-950 hover:bg-[#fef9c3]"
                   }`}
               >
                 <span className="flex items-center gap-1 font-pixel text-xs font-bold uppercase">
@@ -836,7 +1065,7 @@ export function PhotoBooth() {
                 {slots.map((shot, idx) => (
                   <div
                     key={idx}
-                    className="relative flex aspect-video items-center justify-center overflow-hidden border-2 border-zinc-950 bg-[#fffbeb] font-pixel text-[11px] font-bold text-zinc-500"
+                    className="relative flex aspect-[4/3] items-center justify-center overflow-hidden border-2 border-zinc-950 bg-[#fffbeb] font-pixel text-[11px] font-bold text-zinc-500"
                   >
                     {shot ? (
                       <>
@@ -919,10 +1148,10 @@ export function PhotoBooth() {
             </div>
           </div>
 
-          {/* Frame Paper Color Picker */}
+          {/* Frame Paper Color & Pattern Picker */}
           <div className="space-y-2">
             <p className="font-pixel text-xs font-bold uppercase">PAPER THEME:</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid max-h-40 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
               {FRAME_THEMES.map((theme) => {
                 const selected = frameTheme.id === theme.id;
                 return (
@@ -930,14 +1159,18 @@ export function PhotoBooth() {
                     key={theme.id}
                     type="button"
                     onClick={() => setFrameTheme(theme)}
-                    className={`brutal-btn flex items-center gap-2 px-2.5 py-2 font-pixel text-xs font-bold ${selected ? "bg-[#22d3ee]" : "bg-white"
+                    className={`brutal-btn flex items-center gap-2 px-2.5 py-1.5 font-pixel text-xs font-bold ${selected ? "bg-[#22d3ee]" : "bg-white"
                       }`}
                   >
                     <span
-                      className="h-4 w-4 border-2 border-zinc-950"
-                      style={{ backgroundColor: theme.bg }}
+                      className="h-4 w-4 shrink-0 border-2 border-zinc-950"
+                      style={{
+                        backgroundColor: theme.bg,
+                        backgroundImage: theme.swatch,
+                        backgroundSize: "8px 8px",
+                      }}
                     />
-                    {theme.label}
+                    <span className="truncate">{theme.label}</span>
                   </button>
                 );
               })}

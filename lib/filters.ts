@@ -1,64 +1,149 @@
-export type EffectType = "none" | "mirror" | "pixelate" | "duotone";
+export type FilterEffect =
+  | "none"
+  | "mirror"
+  | "pixelate"
+  | "duotone"
+  | "crt"
+  | "vhs"
+  | "halftone"
+  | "thermal";
 
 export interface CameraFilter {
   id: string;
   name: string;
-  category: "color" | "retro" | "distortion";
+  category: "BASIC" | "RETRO" | "FILM" | "FX";
+  effect: FilterEffect;
   cssFilter: (intensity: number) => string;
-  effect?: EffectType;
 }
 
 export const CAMERA_FILTERS: CameraFilter[] = [
+  // --- BASIC ---
   {
     id: "normal",
-    name: "Normal",
-    category: "color",
+    name: "RAW CAM",
+    category: "BASIC",
+    effect: "none",
     cssFilter: () => "none",
   },
   {
-    id: "bw-noir",
-    name: "Noir B&W",
-    category: "color",
-    cssFilter: (v) => `grayscale(${v}%) contrast(${100 + v * 0.4}%)`,
+    id: "soft-glow",
+    name: "DREAMY",
+    category: "BASIC",
+    effect: "none",
+    cssFilter: (i) =>
+      `brightness(${100 + i * 0.12}%) contrast(${100 - i * 0.1}%) saturate(${100 + i * 0.2}%) blur(${(i / 100) * 1.2}px)`,
   },
   {
-    id: "vintage-90s",
-    name: "90s Film",
-    category: "retro",
-    cssFilter: (v) =>
-      `sepia(${v * 0.65}%) contrast(${100 + v * 0.15}%) brightness(${100 + v * 0.05}%) saturate(${100 - v * 0.2}%)`,
+    id: "vivid-pop",
+    name: "ARCADE POP",
+    category: "BASIC",
+    effect: "none",
+    cssFilter: (i) =>
+      `saturate(${100 + i * 0.9}%) contrast(${100 + i * 0.25}%) brightness(103%)`,
+  },
+
+  // --- FILM ---
+  {
+    id: "kodak-gold",
+    name: "SUNSET 400",
+    category: "FILM",
+    effect: "none",
+    cssFilter: (i) =>
+      `sepia(${i * 0.35}%) saturate(${100 + i * 0.4}%) contrast(${100 + i * 0.15}%) hue-rotate(-${i * 0.08}deg)`,
   },
   {
-    id: "cyber-pop",
-    name: "Cyber Pop",
-    category: "color",
-    cssFilter: (v) => `hue-rotate(${v * 2.4}deg) saturate(${100 + v * 1.2}%) contrast(115%)`,
+    id: "fujifilm-cool",
+    name: "TOKYO NIGHT",
+    category: "FILM",
+    effect: "none",
+    cssFilter: (i) =>
+      `contrast(${100 + i * 0.2}%) saturate(${100 + i * 0.15}%) hue-rotate(${i * 0.18}deg) brightness(98%)`,
   },
   {
-    id: "dreamy-glow",
-    name: "Soft Glow",
-    category: "retro",
-    cssFilter: (v) => `brightness(${100 + v * 0.18}%) contrast(${100 - v * 0.15}%) saturate(${100 + v * 0.25}%)`,
+    id: "noir-bw",
+    name: "NOIR B&W",
+    category: "FILM",
+    effect: "none",
+    cssFilter: (i) =>
+      `grayscale(${i}%) contrast(${100 + i * 0.45}%) brightness(${100 - i * 0.05}%)`,
   },
   {
-    id: "kaleido-mirror",
-    name: "Mirror Split",
-    category: "distortion",
-    cssFilter: () => "contrast(105%)",
-    effect: "mirror",
+    id: "vintage-sepia",
+    name: "1995 SEPIA",
+    category: "FILM",
+    effect: "none",
+    cssFilter: (i) =>
+      `sepia(${i * 0.85}%) contrast(${100 + i * 0.1}%) brightness(${100 - i * 0.05}%)`,
   },
   {
-    id: "retro-pixel",
-    name: "8-Bit Pixel",
-    category: "distortion",
-    cssFilter: (v) => `saturate(${100 + v * 0.5}%) contrast(120%)`,
+    id: "faded-polaroid",
+    name: "FADED PRINT",
+    category: "FILM",
+    effect: "none",
+    cssFilter: (i) =>
+      `contrast(${100 - i * 0.22}%) brightness(${100 + i * 0.15}%) sepia(${i * 0.25}%) saturate(${100 - i * 0.2}%)`,
+  },
+
+  // --- RETRO ---
+  {
+    id: "gameboy-dmg",
+    name: "GAMEBOY",
+    category: "RETRO",
+    effect: "none",
+    cssFilter: (i) =>
+      `grayscale(100%) sepia(${i}%) hue-rotate(48deg) saturate(${200 + i * 2}%) contrast(${110 + i * 0.3}%)`,
+  },
+  {
+    id: "crt-scan",
+    name: "CRT MONITOR",
+    category: "RETRO",
+    effect: "crt",
+    cssFilter: (i) =>
+      `contrast(${105 + i * 0.25}%) saturate(${110 + i * 0.3}%) brightness(102%)`,
+  },
+  {
+    id: "vhs-glitch",
+    name: "VHS TAPE",
+    category: "RETRO",
+    effect: "vhs",
+    cssFilter: (i) =>
+      `contrast(${100 + i * 0.2}%) saturate(${100 + i * 0.25}%) sepia(${i * 0.15}%)`,
+  },
+  {
+    id: "pixel-8bit",
+    name: "8-BIT PIXEL",
+    category: "RETRO",
     effect: "pixelate",
+    cssFilter: () => "contrast(115%) saturate(120%)",
+  },
+
+  // --- FX ---
+  {
+    id: "cyber-duotone",
+    name: "CYBER DUO",
+    category: "FX",
+    effect: "duotone",
+    cssFilter: () => "contrast(120%)",
   },
   {
-    id: "thermal-vision",
-    name: "Thermal",
-    category: "distortion",
+    id: "thermal-cam",
+    name: "THERMAL",
+    category: "FX",
+    effect: "thermal",
+    cssFilter: () => "contrast(115%)",
+  },
+  {
+    id: "comic-halftone",
+    name: "MANGA DOTS",
+    category: "FX",
+    effect: "halftone",
+    cssFilter: (i) => `grayscale(${Math.min(100, i)}%) contrast(140%)`,
+  },
+  {
+    id: "twin-mirror",
+    name: "SYMMETRY",
+    category: "FX",
+    effect: "mirror",
     cssFilter: () => "none",
-    effect: "duotone",
   },
 ];
