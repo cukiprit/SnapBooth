@@ -11,10 +11,12 @@ import {
   Trash2,
   LayoutGrid,
   X,
+  Zap,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { CAMERA_FILTERS, type CameraFilter } from "@/lib/filters";
 import { GRID_LAYOUTS, type GridLayout } from "@/lib/grid-layouts";
+import { FRAME_STYLES, type FrameStyle } from "@/lib/frame-styles";
 
 const FRAME_THEMES = [
   { id: "classic-white", label: "WHITE", bg: "#ffffff", text: "#09090b" },
@@ -22,6 +24,9 @@ const FRAME_THEMES = [
   { id: "sakura-pink", label: "PINK", bg: "#fbcfe8", text: "#831843" },
   { id: "arcade-yellow", label: "CYBER", bg: "#fef08a", text: "#09090b" },
 ];
+
+const TIMER_OPTIONS = [0, 3, 5, 10] as const;
+type TimerDuration = (typeof TIMER_OPTIONS)[number];
 
 const BUILTIN_PNG_STICKERS = [
   { id: "star", label: "Star", src: "/stickers/star.png" },
@@ -52,7 +57,10 @@ export function PhotoBooth() {
   const [intensity, setIntensity] = useState<number>(80);
 
   const [selectedLayout, setSelectedLayout] = useState<GridLayout>(GRID_LAYOUTS[3]);
-  const [useTimer, setUseTimer] = useState(true);
+
+  // Timer (0 = OFF, 3s, 5s, 10s) & Capture Mode ("single" vs "burst")
+  const [timerSeconds, setTimerSeconds] = useState<TimerDuration>(3);
+  const [captureMode, setCaptureMode] = useState<"single" | "burst">("single");
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
 
@@ -60,20 +68,32 @@ export function PhotoBooth() {
   const [slots, setSlots] = useState<(string | null)[]>(() =>
     Array(GRID_LAYOUTS[3].totalShots).fill(null)
   );
+
+  // Frame Style, Paper Color, Optional PNG Overlay & Caption
+  const [frameStyle, setFrameStyle] = useState<FrameStyle>(FRAME_STYLES[0]);
   const [frameTheme, setFrameTheme] = useState(FRAME_THEMES[0]);
+  const [customFrameOverlay, setCustomFrameOverlay] = useState<string | null>(null);
   const [customCaption, setCustomCaption] = useState("SNAPBOOTH.EXE");
+
+  // Stickers
   const [stickers, setStickers] = useState<PlacedSticker[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const [finalOutput, setFinalOutput] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
-  // Derived slot counts
   const filledCount = slots.filter(Boolean).length;
   const nextEmptyIndex = slots.findIndex((s) => s === null);
-  const isGridFull = nextEmptyIndex === -1 && slots.length === selectedLayout.totalShots;
+  const isGridFull =
+    nextEmptyIndex === -1 && slots.length === selectedLayout.totalShots;
 
-  // Handle switching grid size (preserves existing shots up to the new grid size)
+  const cycleTimer = () => {
+    setTimerSeconds((prev) => {
+      const idx = TIMER_OPTIONS.indexOf(prev);
+      return TIMER_OPTIONS[(idx + 1) % TIMER_OPTIONS.length];
+    });
+  };
+
   const handleSelectLayout = (layout: GridLayout) => {
     if (isCapturing) return;
     setSelectedLayout(layout);
@@ -186,7 +206,8 @@ export function PhotoBooth() {
             const imgData = ctx.getImageData(0, 0, w, h);
             const data = imgData.data;
             for (let i = 0; i < data.length; i += 4) {
-              const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+              const lum =
+                0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
               data[i] = lum > 128 ? 255 : lum * 1.5;
               data[i + 1] = lum > 160 ? (lum - 160) * 2.5 : 20;
               data[i + 2] = lum < 128 ? 220 - lum : 40;
@@ -204,12 +225,14 @@ export function PhotoBooth() {
     };
   }, [activeFilter, intensity, mirrorView, facingMode]);
 
-  // 3. Dynamic Grid Collage + Caption + PNG Stickers Compositor
+  // 3. Dynamic Grid Collage + Frame Style + Caption + PNG Stickers Compositor
   const buildGridCollage = useCallback(
     async (
       shots: string[],
       layout: GridLayout,
+      style: FrameStyle,
       theme: (typeof FRAME_THEMES)[number],
+      overlaySrc: string | null,
       caption: string,
       placedStickers: PlacedSticker[]
     ) => {
@@ -217,7 +240,7 @@ export function PhotoBooth() {
       if (shots.length < totalShots) return;
 
       const collageCanvas = document.createElement("canvas");
-      const padding = 32;
+      const padding = 36;
       const gap = 20;
       const footerHeight = 84;
       const cellW = 640;
@@ -230,15 +253,82 @@ export function PhotoBooth() {
       const ctx = collageCanvas.getContext("2d");
       if (!ctx) return;
 
-      // Frame Background & Brutalist Outer Border
-      ctx.fillStyle = theme.bg;
+      // A. Frame Background & Decorative Procedural Border
+      const isFilm = style.id === "film-strip";
+      const bg = isFilm ? "#18181b" : theme.bg;
+      const fg = isFilm ? "#fafafa" : theme.text;
+
+      ctx.fillStyle = bg;
       ctx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
 
-      ctx.strokeStyle = "#09090b";
-      ctx.lineWidth = 10;
-      ctx.strokeRect(5, 5, collageCanvas.width - 10, collageCanvas.height - 10);
+      if (style.id === "checkerboard") {
+        const sq = 16;
+        ctx.fillStyle = "#09090b";
+        for (let y = 0; y < collageCanvas.height; y += sq) {
+          for (let x = 0; x < collageCanvas.width; x += sq) {
+            if (((x / sq + y / sq) & 1) === 0) {
+              ctx.fillRect(x, y, sq, sq);
+            }
+          }
+        }
+        ctx.fillStyle = theme.bg;
+        ctx.fillRect(
+          18,
+          18,
+          collageCanvas.width - 36,
+          collageCanvas.height - 36
+        );
+      }
 
-      // Draw Each Grid Photo
+      if (style.id === "film-strip") {
+        ctx.fillStyle = "#f4f4f5";
+        for (let y = 24; y < collageCanvas.height - 24; y += 36) {
+          ctx.fillRect(10, y, 12, 20);
+          ctx.fillRect(collageCanvas.width - 22, y, 12, 20);
+        }
+      }
+
+      if (style.id === "arcade-bezel") {
+        ctx.strokeStyle = "#09090b";
+        ctx.lineWidth = 12;
+        ctx.strokeRect(
+          6,
+          6,
+          collageCanvas.width - 12,
+          collageCanvas.height - 12
+        );
+        ctx.lineWidth = 4;
+        ctx.strokeRect(
+          18,
+          18,
+          collageCanvas.width - 36,
+          collageCanvas.height - 36
+        );
+
+        ctx.fillStyle = "#f43f5e";
+        const bolts = [
+          [12, 12],
+          [collageCanvas.width - 12, 12],
+          [12, collageCanvas.height - 12],
+          [collageCanvas.width - 12, collageCanvas.height - 12],
+        ];
+        for (const [bx, by] of bolts) {
+          ctx.beginPath();
+          ctx.arc(bx, by, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else {
+        ctx.strokeStyle = "#09090b";
+        ctx.lineWidth = 10;
+        ctx.strokeRect(
+          5,
+          5,
+          collageCanvas.width - 10,
+          collageCanvas.height - 10
+        );
+      }
+
+      // B. Draw Each Grid Photo
       for (let idx = 0; idx < totalShots; idx++) {
         const img = new Image();
         img.src = shots[idx];
@@ -268,13 +358,33 @@ export function PhotoBooth() {
 
         ctx.drawImage(img, sx, sy, sw, sh, dx, dy, cellW, cellH);
 
-        ctx.strokeStyle = "#09090b";
+        ctx.strokeStyle = isFilm ? "#fafafa" : "#09090b";
         ctx.lineWidth = 4;
         ctx.strokeRect(dx, dy, cellW, cellH);
       }
 
-      // Custom Caption + Date Stamp
-      ctx.fillStyle = theme.text;
+      // C. Optional Custom PNG Frame Overlay
+      if (overlaySrc) {
+        const overlayImg = new Image();
+        overlayImg.crossOrigin = "anonymous";
+        overlayImg.src = overlaySrc;
+        const ok = await new Promise<boolean>((resolve) => {
+          overlayImg.onload = () => resolve(true);
+          overlayImg.onerror = () => resolve(false);
+        });
+        if (ok) {
+          ctx.drawImage(
+            overlayImg,
+            0,
+            0,
+            collageCanvas.width,
+            collageCanvas.height
+          );
+        }
+      }
+
+      // D. Custom Caption + Date Stamp
+      ctx.fillStyle = fg;
       ctx.font = "bold 24px monospace";
       ctx.textAlign = "center";
       const label = caption.trim() || "SNAPBOOTH";
@@ -284,7 +394,7 @@ export function PhotoBooth() {
         collageCanvas.height - 32
       );
 
-      // Draw Placed PNG Stickers
+      // E. Draw Placed PNG Stickers
       for (const s of placedStickers) {
         const stickerImg = new Image();
         stickerImg.crossOrigin = "anonymous";
@@ -317,7 +427,6 @@ export function PhotoBooth() {
     []
   );
 
-  // Build final output only when EVERY slot in the grid is filled
   useEffect(() => {
     const validShots = slots.filter((s): s is string => Boolean(s));
     if (
@@ -327,7 +436,9 @@ export function PhotoBooth() {
       buildGridCollage(
         validShots,
         selectedLayout,
+        frameStyle,
         frameTheme,
+        customFrameOverlay,
         customCaption,
         stickers
       );
@@ -337,13 +448,15 @@ export function PhotoBooth() {
   }, [
     slots,
     selectedLayout,
+    frameStyle,
     frameTheme,
+    customFrameOverlay,
     customCaption,
     stickers,
     buildGridCollage,
   ]);
 
-  // 4. Manual Single-Shot Capture (Waits for User Click Each Time)
+  // 4. Single & Burst Capture Handlers
   const snapSingleFrame = (): string | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -354,6 +467,10 @@ export function PhotoBooth() {
 
   const runCountdown = (seconds: number) =>
     new Promise<void>((resolve) => {
+      if (seconds <= 0) {
+        resolve();
+        return;
+      }
       let current = seconds;
       setCountdown(current);
       const interval = setInterval(() => {
@@ -368,31 +485,46 @@ export function PhotoBooth() {
       }, 1000);
     });
 
-  const handleCaptureSingleSlot = async () => {
+  const handleCapture = async () => {
     if (isCapturing || isGridFull) return;
     setIsCapturing(true);
 
     try {
-      if (useTimer) {
-        await runCountdown(3);
-      }
+      // Find all currently empty slot indices
+      const emptyIndices = slots
+        .map((val, idx) => (val === null ? idx : -1))
+        .filter((idx) => idx !== -1);
 
-      const shot = snapSingleFrame();
-      if (shot) {
-        setSlots((prev) => {
-          const targetIdx = prev.findIndex((item) => item === null);
-          if (targetIdx === -1) return prev;
-          const updated = [...prev];
-          updated[targetIdx] = shot;
-          return updated;
-        });
+      if (emptyIndices.length === 0) return;
+
+      // Single mode shoots only the first empty slot; Burst mode fills every empty slot
+      const targets =
+        captureMode === "single" ? [emptyIndices[0]] : emptyIndices;
+
+      for (let i = 0; i < targets.length; i++) {
+        const targetIdx = targets[i];
+
+        if (timerSeconds > 0) {
+          await runCountdown(timerSeconds);
+        } else if (i > 0) {
+          // Brief 1s breathing room between burst shots when timer is OFF
+          await runCountdown(1);
+        }
+
+        const shot = snapSingleFrame();
+        if (shot) {
+          setSlots((prev) => {
+            const updated = [...prev];
+            updated[targetIdx] = shot;
+            return updated;
+          });
+        }
       }
     } finally {
       setIsCapturing(false);
     }
   };
 
-  // Delete a specific slot so the user can retake just that photo
   const handleDeleteSlot = (indexToDelete: number) => {
     if (isCapturing) return;
     setSlots((prev) => {
@@ -440,8 +572,14 @@ export function PhotoBooth() {
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!draggingId || !previewContainerRef.current) return;
     const rect = previewContainerRef.current.getBoundingClientRect();
-    const nx = Math.min(0.95, Math.max(0.05, (e.clientX - rect.left) / rect.width));
-    const ny = Math.min(0.95, Math.max(0.05, (e.clientY - rect.top) / rect.height));
+    const nx = Math.min(
+      0.95,
+      Math.max(0.05, (e.clientX - rect.left) / rect.width)
+    );
+    const ny = Math.min(
+      0.95,
+      Math.max(0.05, (e.clientY - rect.top) / rect.height)
+    );
 
     setStickers((prev) =>
       prev.map((s) => (s.id === draggingId ? { ...s, x: nx, y: ny } : s))
@@ -455,6 +593,8 @@ export function PhotoBooth() {
     link.href = finalOutput;
     link.click();
   };
+
+  const remainingSlots = selectedLayout.totalShots - filledCount;
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6 px-4 lg:grid-cols-[1fr_360px]">
@@ -486,31 +626,61 @@ export function PhotoBooth() {
             })}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Timer Cycle Toggle: OFF -> 3S -> 5S -> 10S */}
             <button
               type="button"
-              onClick={() => setUseTimer((t) => !t)}
-              className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${useTimer ? "bg-[#a3e635] text-zinc-950" : "bg-white text-zinc-600"
+              disabled={isCapturing}
+              onClick={cycleTimer}
+              title="Click to cycle timer: OFF / 3s / 5s / 10s"
+              className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${timerSeconds > 0
+                  ? "bg-[#a3e635] text-zinc-950"
+                  : "bg-white text-zinc-600"
                 }`}
             >
               <Timer className="h-3.5 w-3.5" />
-              3S
+              {timerSeconds === 0 ? "NO TIMER" : `${timerSeconds}S`}
             </button>
 
+            {/* Capture Mode Toggle: SINGLE vs BURST */}
+            <button
+              type="button"
+              disabled={isCapturing}
+              onClick={() =>
+                setCaptureMode((prev) =>
+                  prev === "single" ? "burst" : "single"
+                )
+              }
+              title="Toggle Single Shot vs Auto-Burst"
+              className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${captureMode === "burst"
+                  ? "bg-[#facc15] text-zinc-950"
+                  : "bg-white text-zinc-800"
+                }`}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              {captureMode === "burst" ? "BURST" : "SINGLE"}
+            </button>
+
+            {/* Mirror Toggle */}
             <button
               type="button"
               onClick={() => setMirrorView((m) => !m)}
-              className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${mirrorView ? "bg-[#a3e635] text-zinc-950" : "bg-white text-zinc-600"
+              className={`brutal-btn flex items-center gap-1.5 px-2.5 py-1 font-pixel text-xs font-bold uppercase ${mirrorView
+                  ? "bg-[#a3e635] text-zinc-950"
+                  : "bg-white text-zinc-600"
                 }`}
             >
               <FlipHorizontal className="h-3.5 w-3.5" />
               FLIP
             </button>
 
+            {/* Switch Front / Rear Camera */}
             <button
               type="button"
               onClick={() =>
-                setFacingMode((prev) => (prev === "user" ? "environment" : "user"))
+                setFacingMode((prev) =>
+                  prev === "user" ? "environment" : "user"
+                )
               }
               title="Switch camera"
               className="brutal-btn bg-white p-1.5 text-zinc-950"
@@ -532,7 +702,8 @@ export function PhotoBooth() {
               </span>
             </div>
             <span className="font-pixel text-[11px] text-[#facc15]">
-              SLOT {filledCount}/{selectedLayout.totalShots}
+              {captureMode.toUpperCase()} • SLOT {filledCount}/
+              {selectedLayout.totalShots}
             </span>
           </div>
 
@@ -546,7 +717,9 @@ export function PhotoBooth() {
             <div className="pointer-events-none absolute bottom-3 left-3 h-5 w-5 border-b-[3px] border-l-[3px] border-[#facc15]" />
             <div className="pointer-events-none absolute bottom-3 right-3 h-5 w-5 border-b-[3px] border-r-[3px] border-[#facc15]" />
 
-            {flash && <div className="pointer-events-none absolute inset-0 bg-white" />}
+            {flash && (
+              <div className="pointer-events-none absolute inset-0 bg-white" />
+            )}
 
             {countdown !== null && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/45">
@@ -613,19 +786,21 @@ export function PhotoBooth() {
           })}
         </div>
 
-        {/* Manual Per-Shot Shutter Button */}
+        {/* Shutter Button (Adapts label to Single vs Burst mode) */}
         <button
           type="button"
           disabled={isCapturing || isGridFull || Boolean(streamError)}
-          onClick={handleCaptureSingleSlot}
+          onClick={handleCapture}
           className="brutal-btn flex h-16 w-full items-center justify-center gap-3 bg-[#f43f5e] font-pixel text-base font-bold uppercase tracking-wider text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Camera className="h-6 w-6" />
           {isCapturing
-            ? `COUNTDOWN FOR SLOT #${nextEmptyIndex + 1}...`
+            ? `SHOOTING SLOT #${nextEmptyIndex + 1}...`
             : isGridFull
               ? "GRID FULL! DELETE A SHOT OR SAVE"
-              : `CAPTURE SLOT #${nextEmptyIndex + 1} (${filledCount}/${selectedLayout.totalShots})`}
+              : captureMode === "burst"
+                ? `BURST SHOOT (${remainingSlots} ${remainingSlots === 1 ? "SLOT" : "SLOTS"} LEFT)`
+                : `CAPTURE SLOT #${nextEmptyIndex + 1} (${filledCount}/${selectedLayout.totalShots})`}
         </button>
       </div>
 
@@ -646,7 +821,7 @@ export function PhotoBooth() {
             )}
           </div>
 
-          {/* Individual Slot Manager (Always visible when at least 1 photo exists so you can delete any single shot) */}
+          {/* Individual Slot Manager */}
           {filledCount > 0 && (
             <div className="space-y-1.5">
               <p className="font-pixel text-[11px] font-bold uppercase text-zinc-700">
@@ -688,6 +863,62 @@ export function PhotoBooth() {
             </div>
           )}
 
+          {/* Frame Style Picker */}
+          <div className="space-y-2">
+            <p className="font-pixel text-xs font-bold uppercase">FRAME STYLE:</p>
+            <div className="grid grid-cols-2 gap-2">
+              {FRAME_STYLES.map((st) => {
+                const active = frameStyle.id === st.id;
+                return (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setFrameStyle(st)}
+                    className={`brutal-btn px-2.5 py-2 text-left font-pixel text-xs font-bold ${active ? "bg-[#facc15] text-zinc-950" : "bg-white"
+                      }`}
+                  >
+                    {st.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Optional Custom PNG Frame Overlay Upload */}
+            <div className="flex items-center gap-2 pt-1">
+              <label className="brutal-btn flex flex-1 cursor-pointer items-center justify-center bg-[#fffbeb] py-1.5 font-pixel text-[11px] font-bold uppercase hover:bg-[#fef08a]">
+                {customFrameOverlay
+                  ? "CHANGE PNG FRAME"
+                  : "+ PNG FRAME OVERLAY"}
+                <input
+                  type="file"
+                  accept="image/png,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      if (typeof reader.result === "string") {
+                        setCustomFrameOverlay(reader.result);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }}
+                  className="hidden"
+                />
+              </label>
+              {customFrameOverlay && (
+                <button
+                  type="button"
+                  onClick={() => setCustomFrameOverlay(null)}
+                  className="brutal-btn bg-[#f43f5e] px-2.5 py-1.5 font-pixel text-[11px] font-bold text-white"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Frame Paper Color Picker */}
           <div className="space-y-2">
             <p className="font-pixel text-xs font-bold uppercase">PAPER THEME:</p>
@@ -728,7 +959,7 @@ export function PhotoBooth() {
             />
           </div>
 
-          {/* PNG Sticker Stamp Bar (Visible once final collage is ready) */}
+          {/* PNG Sticker Stamp Bar */}
           {finalOutput && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -788,7 +1019,9 @@ export function PhotoBooth() {
                       const nextSize = Number(e.target.value);
                       setStickers((prev) =>
                         prev.map((st, idx) =>
-                          idx === prev.length - 1 ? { ...st, size: nextSize } : st
+                          idx === prev.length - 1
+                            ? { ...st, size: nextSize }
+                            : st
                         )
                       );
                     }}
@@ -799,7 +1032,7 @@ export function PhotoBooth() {
             </div>
           )}
 
-          {/* Final Printed Collage Preview (or Empty State Prompt) */}
+          {/* Final Printed Collage Preview */}
           <div className="flex min-h-[260px] items-center justify-center border-[3px] border-dashed border-zinc-950 bg-[#fffbeb] p-3">
             {finalOutput ? (
               <div
@@ -824,7 +1057,9 @@ export function PhotoBooth() {
                       setDraggingId(s.id);
                     }}
                     onDoubleClick={() =>
-                      setStickers((prev) => prev.filter((item) => item.id !== s.id))
+                      setStickers((prev) =>
+                        prev.filter((item) => item.id !== s.id)
+                      )
                     }
                     title="Drag to move • Double-click to remove"
                     style={{
