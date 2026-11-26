@@ -870,8 +870,8 @@ export function PhotoBooth() {
                 type="button"
                 onClick={() => setActiveFilter(filter)}
                 className={`brutal-btn flex items-center justify-between gap-1.5 px-2.5 py-2 text-left ${isSelected
-                    ? "bg-[#facc15] text-zinc-950"
-                    : "bg-white text-zinc-950 hover:bg-[#fef9c3]"
+                  ? "bg-[#facc15] text-zinc-950"
+                  : "bg-white text-zinc-950 hover:bg-[#fef9c3]"
                   }`}
               >
                 <span className="flex items-center gap-1 truncate font-pixel text-[11px] font-bold uppercase">
@@ -905,8 +905,8 @@ export function PhotoBooth() {
                   disabled={isCapturing}
                   onClick={() => handleSelectLayout(layout)}
                   className={`brutal-btn px-2 py-1 font-pixel text-[11px] font-bold uppercase ${active
-                      ? "bg-[#22d3ee] text-zinc-950"
-                      : "bg-[#fffbeb] text-zinc-800 hover:bg-zinc-100"
+                    ? "bg-[#22d3ee] text-zinc-950"
+                    : "bg-[#fffbeb] text-zinc-800 hover:bg-zinc-100"
                     }`}
                 >
                   {layout.id}
@@ -923,8 +923,8 @@ export function PhotoBooth() {
               onClick={cycleTimer}
               title="Click to cycle timer: OFF / 3s / 5s / 10s"
               className={`brutal-btn flex items-center gap-1 px-2 py-1 font-pixel text-[11px] font-bold uppercase ${timerSeconds > 0
-                  ? "bg-[#a3e635] text-zinc-950"
-                  : "bg-white text-zinc-600"
+                ? "bg-[#a3e635] text-zinc-950"
+                : "bg-white text-zinc-600"
                 }`}
             >
               <Timer className="h-3.5 w-3.5" />
@@ -942,8 +942,8 @@ export function PhotoBooth() {
               }
               title="Toggle Single Shot vs Auto-Burst"
               className={`brutal-btn flex items-center gap-1 px-2 py-1 font-pixel text-[11px] font-bold uppercase ${captureMode === "burst"
-                  ? "bg-[#facc15] text-zinc-950"
-                  : "bg-white text-zinc-800"
+                ? "bg-[#facc15] text-zinc-950"
+                : "bg-white text-zinc-800"
                 }`}
             >
               <Zap className="h-3.5 w-3.5" />
@@ -955,8 +955,8 @@ export function PhotoBooth() {
               type="button"
               onClick={() => setMirrorView((m) => !m)}
               className={`brutal-btn flex items-center gap-1 px-2 py-1 font-pixel text-[11px] font-bold uppercase ${mirrorView
-                  ? "bg-[#a3e635] text-zinc-950"
-                  : "bg-white text-zinc-600"
+                ? "bg-[#a3e635] text-zinc-950"
+                : "bg-white text-zinc-600"
                 }`}
             >
               <FlipHorizontal className="h-3.5 w-3.5" />
@@ -1048,7 +1048,8 @@ export function PhotoBooth() {
       </div>
 
       {/* Column 3 (Right): Live Print Preview AT TOP + Customization Below */}
-      <aside className="brutal-box order-3 space-y-3 bg-white p-3.5">
+      {/* Column 3 (Right): Live Print Preview + Stickers + Compact Customizer */}
+      <aside className="brutal-box order-3 space-y-2.5 bg-white p-3.5">
         <div className="flex items-center justify-between border-b-[3px] border-zinc-950 pb-2">
           <h2 className="font-pixel text-xs font-bold uppercase">PRINT SLOT</h2>
           {filledCount > 0 && (
@@ -1063,8 +1064,8 @@ export function PhotoBooth() {
           )}
         </div>
 
-        {/* Final Printed Collage Preview (Placed at top so it's immediately visible!) */}
-        <div className="flex min-h-[210px] items-center justify-center border-[3px] border-dashed border-zinc-950 bg-[#fffbeb] p-2.5">
+        {/* 1. Final Printed Collage Preview */}
+        <div className="flex min-h-[200px] items-center justify-center border-[3px] border-dashed border-zinc-950 bg-[#fffbeb] p-2.5">
           {finalOutput ? (
             <div
               ref={previewContainerRef}
@@ -1077,7 +1078,7 @@ export function PhotoBooth() {
                 src={finalOutput}
                 alt="Captured grid collage"
                 draggable={false}
-                className="max-h-[300px] border-[3px] border-zinc-950 shadow-[4px_4px_0px_#09090b]"
+                className="max-h-[280px] border-[3px] border-zinc-950 shadow-[4px_4px_0px_#09090b]"
               />
               {stickers.map((s) => (
                 <button
@@ -1109,7 +1110,7 @@ export function PhotoBooth() {
                 SHOOT SLOT #{nextEmptyIndex + 1} OF {selectedLayout.totalShots}
               </p>
               <div
-                className="mx-auto grid max-w-[240px] gap-1.5"
+                className="mx-auto grid max-w-[230px] gap-1.5"
                 style={{
                   gridTemplateColumns: `repeat(${selectedLayout.cols}, minmax(0, 1fr))`,
                 }}
@@ -1145,18 +1146,216 @@ export function PhotoBooth() {
           )}
         </div>
 
-        {/* Save PNG Button Right Below Preview */}
+        {/* 2. PNG Sticker Stamp Bar (Right Below Preview — Zero Scrolling!) */}
+        {finalOutput && (
+          <div className="space-y-1.5 border-2 border-zinc-950 bg-[#fffbeb] p-2">
+            <div className="flex items-center justify-between">
+              <span className="font-pixel text-[10px] font-bold uppercase">
+                STICKERS (DRAG / DBL-CLICK DEL):
+              </span>
+              {stickers.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStickers([])}
+                  className="font-pixel text-[10px] font-bold text-[#f43f5e] underline"
+                >
+                  CLEAR
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {BUILTIN_PNG_STICKERS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => addPngSticker(item.src)}
+                  className="brutal-btn flex h-9 flex-1 items-center justify-center bg-white p-1 hover:bg-[#fef08a]"
+                  title={item.label}
+                >
+                  <img
+                    src={item.src}
+                    alt={item.label}
+                    className="h-6 w-6 object-contain"
+                  />
+                </button>
+              ))}
+
+              <label
+                title="Upload Custom PNG Sticker"
+                className="brutal-btn flex h-9 cursor-pointer items-center justify-center bg-[#22d3ee] px-2.5 font-pixel text-[10px] font-bold uppercase text-zinc-950"
+              >
+                + PNG
+                <input
+                  type="file"
+                  accept="image/png,image/webp,image/gif"
+                  onChange={handleUploadCustomPng}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {stickers.length > 0 && (
+              <div className="flex items-center gap-2 pt-0.5">
+                <span className="font-pixel text-[10px] font-bold uppercase">
+                  SIZE:
+                </span>
+                <input
+                  type="range"
+                  min={60}
+                  max={360}
+                  value={stickers[stickers.length - 1].size}
+                  onChange={(e) => {
+                    const nextSize = Number(e.target.value);
+                    setStickers((prev) =>
+                      prev.map((st, idx) =>
+                        idx === prev.length - 1
+                          ? { ...st, size: nextSize }
+                          : st
+                      )
+                    );
+                  }}
+                  className="w-full accent-zinc-950"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Save PNG Button */}
         <button
           type="button"
           disabled={!finalOutput}
           onClick={downloadImage}
-          className="brutal-btn flex h-11 w-full items-center justify-center gap-2 bg-[#a3e635] font-pixel text-xs font-bold uppercase text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
+          className="brutal-btn flex h-10 w-full items-center justify-center gap-2 bg-[#a3e635] font-pixel text-xs font-bold uppercase text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Download className="h-4 w-4" />
           SAVE PNG ({selectedLayout.id})
         </button>
 
-        {/* Individual Slot Manager when Grid is Full */}
+        {/* 4. Compact 2-Column Frame Style & Paper Theme Selectors */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <label
+              htmlFor="frame-style-select"
+              className="block font-pixel text-[10px] font-bold uppercase"
+            >
+              FRAME STYLE:
+            </label>
+            <select
+              id="frame-style-select"
+              value={frameStyle.id}
+              onChange={(e) => {
+                const found = FRAME_STYLES.find(
+                  (st) => st.id === e.target.value
+                );
+                if (found) setFrameStyle(found);
+              }}
+              className="brutal-btn h-8 w-full cursor-pointer bg-[#facc15] px-2 font-pixel text-[10px] font-bold uppercase text-zinc-950 focus:outline-none"
+            >
+              {FRAME_STYLES.map((st) => (
+                <option
+                  key={st.id}
+                  value={st.id}
+                  className="bg-white text-zinc-950"
+                >
+                  {st.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor="paper-theme-select"
+              className="block font-pixel text-[10px] font-bold uppercase"
+            >
+              PAPER THEME:
+            </label>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="h-8 w-8 shrink-0 border-2 border-zinc-950"
+                title={frameTheme.label}
+                style={{
+                  backgroundColor: frameTheme.bg,
+                  backgroundImage: frameTheme.swatch,
+                  backgroundSize: "8px 8px",
+                }}
+              />
+              <select
+                id="paper-theme-select"
+                value={frameTheme.id}
+                onChange={(e) => {
+                  const found = FRAME_THEMES.find(
+                    (t) => t.id === e.target.value
+                  );
+                  if (found) setFrameTheme(found);
+                }}
+                className="brutal-btn h-8 w-full cursor-pointer bg-white px-2 font-pixel text-[10px] font-bold uppercase text-zinc-950 focus:bg-[#22d3ee] focus:outline-none"
+              >
+                {FRAME_THEMES.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Custom Frame Text + PNG Overlay Row */}
+        <div className="grid grid-cols-[1fr_auto] items-end gap-1.5">
+          <div className="space-y-1">
+            <label className="block font-pixel text-[10px] font-bold uppercase">
+              FRAME TEXT:
+            </label>
+            <input
+              type="text"
+              maxLength={28}
+              value={customCaption}
+              onChange={(e) => setCustomCaption(e.target.value)}
+              placeholder="CAPTION..."
+              className="h-8 w-full border-2 border-zinc-950 bg-[#fffbeb] px-2 font-mono text-xs font-bold uppercase focus:bg-[#fef08a] focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-1">
+            <label
+              title="Upload Custom PNG Frame Overlay"
+              className="brutal-btn flex h-8 cursor-pointer items-center justify-center bg-[#fffbeb] px-2 font-pixel text-[10px] font-bold uppercase hover:bg-[#fef08a]"
+            >
+              {customFrameOverlay ? "PNG ✓" : "+ FRAME"}
+              <input
+                type="file"
+                accept="image/png,image/webp"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    if (typeof reader.result === "string") {
+                      setCustomFrameOverlay(reader.result);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                  e.target.value = "";
+                }}
+                className="hidden"
+              />
+            </label>
+            {customFrameOverlay && (
+              <button
+                type="button"
+                onClick={() => setCustomFrameOverlay(null)}
+                className="brutal-btn flex h-8 items-center justify-center bg-[#f43f5e] px-2 font-pixel text-[10px] font-bold text-white"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 6. Individual Slot Manager when Grid is Full */}
         {finalOutput && (
           <div className="space-y-1">
             <p className="font-pixel text-[10px] font-bold uppercase text-zinc-700">
@@ -1193,180 +1392,6 @@ export function PhotoBooth() {
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Frame Style Picker */}
-        <div className="space-y-1.5">
-          <p className="font-pixel text-[11px] font-bold uppercase">
-            FRAME STYLE:
-          </p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {FRAME_STYLES.map((st) => {
-              const active = frameStyle.id === st.id;
-              return (
-                <button
-                  key={st.id}
-                  type="button"
-                  onClick={() => setFrameStyle(st)}
-                  className={`brutal-btn px-2 py-1.5 text-left font-pixel text-[11px] font-bold ${active ? "bg-[#facc15] text-zinc-950" : "bg-white"
-                    }`}
-                >
-                  {st.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-1.5 pt-1">
-            <label className="brutal-btn flex flex-1 cursor-pointer items-center justify-center bg-[#fffbeb] py-1 font-pixel text-[10px] font-bold uppercase hover:bg-[#fef08a]">
-              {customFrameOverlay ? "CHANGE PNG FRAME" : "+ PNG FRAME OVERLAY"}
-              <input
-                type="file"
-                accept="image/png,image/webp"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    if (typeof reader.result === "string") {
-                      setCustomFrameOverlay(reader.result);
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                  e.target.value = "";
-                }}
-                className="hidden"
-              />
-            </label>
-            {customFrameOverlay && (
-              <button
-                type="button"
-                onClick={() => setCustomFrameOverlay(null)}
-                className="brutal-btn bg-[#f43f5e] px-2 py-1 font-pixel text-[10px] font-bold text-white"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Paper Theme Picker */}
-        <div className="space-y-1.5">
-          <p className="font-pixel text-[11px] font-bold uppercase">
-            PAPER THEME:
-          </p>
-          <div className="grid max-h-36 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
-            {FRAME_THEMES.map((theme) => {
-              const selected = frameTheme.id === theme.id;
-              return (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => setFrameTheme(theme)}
-                  className={`brutal-btn flex items-center gap-1.5 px-2 py-1.5 font-pixel text-[11px] font-bold ${selected ? "bg-[#22d3ee]" : "bg-white"
-                    }`}
-                >
-                  <span
-                    className="h-3.5 w-3.5 shrink-0 border-2 border-zinc-950"
-                    style={{
-                      backgroundColor: theme.bg,
-                      backgroundImage: theme.swatch,
-                      backgroundSize: "8px 8px",
-                    }}
-                  />
-                  <span className="truncate">{theme.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Custom Frame Caption Input */}
-        <div className="space-y-1">
-          <label className="block font-pixel text-[11px] font-bold uppercase">
-            FRAME TEXT:
-          </label>
-          <input
-            type="text"
-            maxLength={28}
-            value={customCaption}
-            onChange={(e) => setCustomCaption(e.target.value)}
-            placeholder="TYPE YOUR CAPTION..."
-            className="w-full border-[2.5px] border-zinc-950 bg-[#fffbeb] px-2.5 py-1.5 font-mono text-xs font-bold uppercase focus:bg-[#fef08a] focus:outline-none"
-          />
-        </div>
-
-        {/* PNG Sticker Stamp Bar */}
-        {finalOutput && (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-pixel text-[10px] font-bold uppercase">
-                PNG STICKERS (DRAG / DBL-CLICK DEL):
-              </span>
-              {stickers.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setStickers([])}
-                  className="font-pixel text-[10px] font-bold text-[#f43f5e] underline"
-                >
-                  CLEAR
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-4 gap-1.5">
-              {BUILTIN_PNG_STICKERS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => addPngSticker(item.src)}
-                  className="brutal-btn flex h-10 items-center justify-center bg-white p-1 hover:bg-[#fef08a]"
-                  title={item.label}
-                >
-                  <img
-                    src={item.src}
-                    alt={item.label}
-                    className="h-7 w-7 object-contain"
-                  />
-                </button>
-              ))}
-            </div>
-
-            <label className="brutal-btn flex w-full cursor-pointer items-center justify-center gap-2 bg-[#22d3ee] py-1.5 font-pixel text-[11px] font-bold uppercase text-zinc-950">
-              + UPLOAD CUSTOM PNG
-              <input
-                type="file"
-                accept="image/png,image/webp,image/gif"
-                onChange={handleUploadCustomPng}
-                className="hidden"
-              />
-            </label>
-
-            {stickers.length > 0 && (
-              <div className="flex items-center gap-2 pt-0.5">
-                <span className="font-pixel text-[10px] font-bold uppercase">
-                  SIZE:
-                </span>
-                <input
-                  type="range"
-                  min={60}
-                  max={360}
-                  value={stickers[stickers.length - 1].size}
-                  onChange={(e) => {
-                    const nextSize = Number(e.target.value);
-                    setStickers((prev) =>
-                      prev.map((st, idx) =>
-                        idx === prev.length - 1
-                          ? { ...st, size: nextSize }
-                          : st
-                      )
-                    );
-                  }}
-                  className="w-full accent-zinc-950"
-                />
-              </div>
-            )}
           </div>
         )}
       </aside>
