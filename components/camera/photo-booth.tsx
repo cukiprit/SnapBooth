@@ -10,6 +10,7 @@ import {
   Timer,
   Trash2,
   LayoutGrid,
+  X,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { CAMERA_FILTERS, type CameraFilter } from "@/lib/filters";
@@ -31,10 +32,10 @@ const BUILTIN_PNG_STICKERS = [
 
 interface PlacedSticker {
   id: string;
-  src: string;   // "/stickers/star.png" OR uploaded "data:image/png;base64,..."
-  x: number;     // 0 to 1 (normalized center X)
-  y: number;     // 0 to 1 (normalized center Y)
-  size: number;  // base pixel width on the exported collage
+  src: string;
+  x: number;
+  y: number;
+  size: number;
 }
 
 export function PhotoBooth() {
@@ -55,7 +56,10 @@ export function PhotoBooth() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
 
-  const [capturedShots, setCapturedShots] = useState<string[]>([]);
+  // Fixed-size slot array so individual slots can be deleted and re-shot
+  const [slots, setSlots] = useState<(string | null)[]>(() =>
+    Array(GRID_LAYOUTS[3].totalShots).fill(null)
+  );
   const [frameTheme, setFrameTheme] = useState(FRAME_THEMES[0]);
   const [customCaption, setCustomCaption] = useState("SNAPBOOTH.EXE");
   const [stickers, setStickers] = useState<PlacedSticker[]>([]);
@@ -63,6 +67,24 @@ export function PhotoBooth() {
 
   const [finalOutput, setFinalOutput] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+
+  // Derived slot counts
+  const filledCount = slots.filter(Boolean).length;
+  const nextEmptyIndex = slots.findIndex((s) => s === null);
+  const isGridFull = nextEmptyIndex === -1 && slots.length === selectedLayout.totalShots;
+
+  // Handle switching grid size (preserves existing shots up to the new grid size)
+  const handleSelectLayout = (layout: GridLayout) => {
+    if (isCapturing) return;
+    setSelectedLayout(layout);
+    setSlots((prev) => {
+      const next = Array(layout.totalShots).fill(null);
+      for (let i = 0; i < Math.min(prev.length, layout.totalShots); i++) {
+        next[i] = prev[i];
+      }
+      return next;
+    });
+  };
 
   // 1. Start / Switch Webcam Stream
   useEffect(() => {
@@ -295,10 +317,15 @@ export function PhotoBooth() {
     []
   );
 
+  // Build final output only when EVERY slot in the grid is filled
   useEffect(() => {
-    if (capturedShots.length >= selectedLayout.totalShots) {
+    const validShots = slots.filter((s): s is string => Boolean(s));
+    if (
+      slots.length === selectedLayout.totalShots &&
+      validShots.length === selectedLayout.totalShots
+    ) {
       buildGridCollage(
-        capturedShots,
+        validShots,
         selectedLayout,
         frameTheme,
         customCaption,
@@ -308,7 +335,7 @@ export function PhotoBooth() {
       setFinalOutput(null);
     }
   }, [
-    capturedShots,
+    slots,
     selectedLayout,
     frameTheme,
     customCaption,
@@ -316,7 +343,7 @@ export function PhotoBooth() {
     buildGridCollage,
   ]);
 
-  // 4. Capture & Sticker Interaction Handlers
+  // 4. Manual Single-Shot Capture (Waits for User Click Each Time)
   const snapSingleFrame = (): string | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -341,34 +368,48 @@ export function PhotoBooth() {
       }, 1000);
     });
 
-  const handleCapture = async () => {
-    if (isCapturing) return;
+  const handleCaptureSingleSlot = async () => {
+    if (isCapturing || isGridFull) return;
     setIsCapturing(true);
-    setFinalOutput(null);
-    setCapturedShots([]);
-
-    const needed = selectedLayout.totalShots;
 
     try {
-      const collected: string[] = [];
-      for (let i = 0; i < needed; i++) {
-        if (useTimer) {
-          await runCountdown(3);
-        } else if (i > 0) {
-          await runCountdown(1);
-        }
+      if (useTimer) {
+        await runCountdown(3);
+      }
 
-        const shot = snapSingleFrame();
-        if (shot) {
-          collected.push(shot);
-          setCapturedShots([...collected]);
-        }
+      const shot = snapSingleFrame();
+      if (shot) {
+        setSlots((prev) => {
+          const targetIdx = prev.findIndex((item) => item === null);
+          if (targetIdx === -1) return prev;
+          const updated = [...prev];
+          updated[targetIdx] = shot;
+          return updated;
+        });
       }
     } finally {
       setIsCapturing(false);
     }
   };
 
+  // Delete a specific slot so the user can retake just that photo
+  const handleDeleteSlot = (indexToDelete: number) => {
+    if (isCapturing) return;
+    setSlots((prev) => {
+      const updated = [...prev];
+      updated[indexToDelete] = null;
+      return updated;
+    });
+  };
+
+  const handleResetAll = () => {
+    if (isCapturing) return;
+    setSlots(Array(selectedLayout.totalShots).fill(null));
+    setFinalOutput(null);
+    setStickers([]);
+  };
+
+  // Sticker Handlers
   const addPngSticker = (src: string) => {
     setStickers((prev) => [
       ...prev,
@@ -433,7 +474,7 @@ export function PhotoBooth() {
                   key={layout.id}
                   type="button"
                   disabled={isCapturing}
-                  onClick={() => setSelectedLayout(layout)}
+                  onClick={() => handleSelectLayout(layout)}
                   className={`brutal-btn px-2.5 py-1 font-pixel text-xs font-bold uppercase ${active
                       ? "bg-[#22d3ee] text-zinc-950"
                       : "bg-[#fffbeb] text-zinc-800 hover:bg-zinc-100"
@@ -491,7 +532,7 @@ export function PhotoBooth() {
               </span>
             </div>
             <span className="font-pixel text-[11px] text-[#facc15]">
-              {selectedLayout.rows}×{selectedLayout.cols} MODE
+              SLOT {filledCount}/{selectedLayout.totalShots}
             </span>
           </div>
 
@@ -572,18 +613,19 @@ export function PhotoBooth() {
           })}
         </div>
 
-        {/* Giant Arcade Shutter Button */}
+        {/* Manual Per-Shot Shutter Button */}
         <button
           type="button"
-          disabled={isCapturing || Boolean(streamError)}
-          onClick={handleCapture}
+          disabled={isCapturing || isGridFull || Boolean(streamError)}
+          onClick={handleCaptureSingleSlot}
           className="brutal-btn flex h-16 w-full items-center justify-center gap-3 bg-[#f43f5e] font-pixel text-base font-bold uppercase tracking-wider text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Camera className="h-6 w-6" />
           {isCapturing
-            ? `SHOOTING [${capturedShots.length}/${selectedLayout.totalShots}]...`
-            : `SNAP ${selectedLayout.rows}×${selectedLayout.cols} (${selectedLayout.totalShots} ${selectedLayout.totalShots === 1 ? "SHOT" : "SHOTS"
-            })`}
+            ? `COUNTDOWN FOR SLOT #${nextEmptyIndex + 1}...`
+            : isGridFull
+              ? "GRID FULL! DELETE A SHOT OR SAVE"
+              : `CAPTURE SLOT #${nextEmptyIndex + 1} (${filledCount}/${selectedLayout.totalShots})`}
         </button>
       </div>
 
@@ -592,21 +634,59 @@ export function PhotoBooth() {
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b-[3px] border-zinc-950 pb-2.5">
             <h2 className="font-pixel text-sm font-bold uppercase">PRINT SLOT</h2>
-            {capturedShots.length > 0 && (
+            {filledCount > 0 && (
               <button
                 type="button"
-                onClick={() => {
-                  setFinalOutput(null);
-                  setCapturedShots([]);
-                  setStickers([]);
-                }}
+                onClick={handleResetAll}
                 className="brutal-btn flex items-center gap-1 bg-zinc-100 px-2 py-1 font-pixel text-[11px] font-bold uppercase"
               >
                 <Trash2 className="h-3 w-3" />
-                RESET
+                RESET ALL
               </button>
             )}
           </div>
+
+          {/* Individual Slot Manager (Always visible when at least 1 photo exists so you can delete any single shot) */}
+          {filledCount > 0 && (
+            <div className="space-y-1.5">
+              <p className="font-pixel text-[11px] font-bold uppercase text-zinc-700">
+                SHOT SLOTS (CLICK ✕ TO RETAKE ONE):
+              </p>
+              <div
+                className="grid gap-1.5"
+                style={{
+                  gridTemplateColumns: `repeat(${selectedLayout.cols}, minmax(0, 1fr))`,
+                }}
+              >
+                {slots.map((shot, idx) => (
+                  <div
+                    key={idx}
+                    className="relative flex aspect-video items-center justify-center overflow-hidden border-2 border-zinc-950 bg-[#fffbeb] font-pixel text-[11px] font-bold text-zinc-500"
+                  >
+                    {shot ? (
+                      <>
+                        <img
+                          src={shot}
+                          alt={`Slot ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSlot(idx)}
+                          title={`Delete shot #${idx + 1} to retake`}
+                          className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center border-2 border-zinc-950 bg-[#f43f5e] text-white shadow-[2px_2px_0px_#09090b] hover:bg-red-600"
+                        >
+                          <X className="h-3.5 w-3.5 stroke-[3]" />
+                        </button>
+                      </>
+                    ) : (
+                      `EMPTY #${idx + 1}`
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Frame Paper Color Picker */}
           <div className="space-y-2">
@@ -648,7 +728,7 @@ export function PhotoBooth() {
             />
           </div>
 
-          {/* PNG Sticker Stamp Bar (Visible once photos are captured) */}
+          {/* PNG Sticker Stamp Bar (Visible once final collage is ready) */}
           {finalOutput && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -719,8 +799,8 @@ export function PhotoBooth() {
             </div>
           )}
 
-          {/* Slot Matrix / Final Printed Strip */}
-          <div className="flex min-h-[340px] items-center justify-center border-[3px] border-dashed border-zinc-950 bg-[#fffbeb] p-3">
+          {/* Final Printed Collage Preview (or Empty State Prompt) */}
+          <div className="flex min-h-[260px] items-center justify-center border-[3px] border-dashed border-zinc-950 bg-[#fffbeb] p-3">
             {finalOutput ? (
               <div
                 ref={previewContainerRef}
@@ -758,32 +838,10 @@ export function PhotoBooth() {
                 ))}
               </div>
             ) : (
-              <div
-                className="grid w-full gap-2"
-                style={{
-                  gridTemplateColumns: `repeat(${selectedLayout.cols}, minmax(0, 1fr))`,
-                }}
-              >
-                {Array.from({ length: selectedLayout.totalShots }).map((_, idx) => {
-                  const shot = capturedShots[idx];
-                  return (
-                    <div
-                      key={idx}
-                      className="flex aspect-video items-center justify-center overflow-hidden border-2 border-zinc-950 bg-white font-pixel text-xs font-bold text-zinc-500"
-                    >
-                      {shot ? (
-                        <img
-                          src={shot}
-                          alt={`Shot ${idx + 1}`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        `[${idx + 1}]`
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <p className="text-center font-pixel text-xs leading-relaxed text-zinc-500">
+                PRESS CAPTURE TO SHOOT SLOT #{nextEmptyIndex + 1} OF{" "}
+                {selectedLayout.totalShots}
+              </p>
             )}
           </div>
         </div>
