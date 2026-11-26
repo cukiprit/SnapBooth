@@ -22,10 +22,26 @@ const FRAME_THEMES = [
   { id: "arcade-yellow", label: "CYBER", bg: "#fef08a", text: "#09090b" },
 ];
 
+const BUILTIN_PNG_STICKERS = [
+  { id: "star", label: "Star", src: "/stickers/star.png" },
+  { id: "heart", label: "Heart", src: "/stickers/heart.png" },
+  { id: "red-heart", label: "Red Heart", src: "/stickers/red-heart.png" },
+  { id: "web", label: "Web", src: "/stickers/web.png" },
+];
+
+interface PlacedSticker {
+  id: string;
+  src: string;   // "/stickers/star.png" OR uploaded "data:image/png;base64,..."
+  x: number;     // 0 to 1 (normalized center X)
+  y: number;     // 0 to 1 (normalized center Y)
+  size: number;  // base pixel width on the exported collage
+}
+
 export function PhotoBooth() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [streamError, setStreamError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
@@ -41,6 +57,10 @@ export function PhotoBooth() {
 
   const [capturedShots, setCapturedShots] = useState<string[]>([]);
   const [frameTheme, setFrameTheme] = useState(FRAME_THEMES[0]);
+  const [customCaption, setCustomCaption] = useState("SNAPBOOTH.EXE");
+  const [stickers, setStickers] = useState<PlacedSticker[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
   const [finalOutput, setFinalOutput] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -162,12 +182,14 @@ export function PhotoBooth() {
     };
   }, [activeFilter, intensity, mirrorView, facingMode]);
 
-  // 3. Dynamic Grid Collage Compositor
+  // 3. Dynamic Grid Collage + Caption + PNG Stickers Compositor
   const buildGridCollage = useCallback(
     async (
       shots: string[],
       layout: GridLayout,
-      theme: (typeof FRAME_THEMES)[number]
+      theme: (typeof FRAME_THEMES)[number],
+      caption: string,
+      placedStickers: PlacedSticker[]
     ) => {
       const { rows, cols, totalShots } = layout;
       if (shots.length < totalShots) return;
@@ -175,7 +197,7 @@ export function PhotoBooth() {
       const collageCanvas = document.createElement("canvas");
       const padding = 32;
       const gap = 20;
-      const footerHeight = 76;
+      const footerHeight = 84;
       const cellW = 640;
       const cellH = 480;
 
@@ -186,14 +208,15 @@ export function PhotoBooth() {
       const ctx = collageCanvas.getContext("2d");
       if (!ctx) return;
 
+      // Frame Background & Brutalist Outer Border
       ctx.fillStyle = theme.bg;
       ctx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
 
-      // Brutalist outer border on the exported print
       ctx.strokeStyle = "#09090b";
       ctx.lineWidth = 10;
       ctx.strokeRect(5, 5, collageCanvas.width - 10, collageCanvas.height - 10);
 
+      // Draw Each Grid Photo
       for (let idx = 0; idx < totalShots; idx++) {
         const img = new Image();
         img.src = shots[idx];
@@ -223,20 +246,49 @@ export function PhotoBooth() {
 
         ctx.drawImage(img, sx, sy, sw, sh, dx, dy, cellW, cellH);
 
-        // Crisp black border around every grid photo
         ctx.strokeStyle = "#09090b";
         ctx.lineWidth = 4;
         ctx.strokeRect(dx, dy, cellW, cellH);
       }
 
+      // Custom Caption + Date Stamp
       ctx.fillStyle = theme.text;
-      ctx.font = "bold 22px monospace";
+      ctx.font = "bold 24px monospace";
       ctx.textAlign = "center";
+      const label = caption.trim() || "SNAPBOOTH";
       ctx.fillText(
-        `SNAPBOOTH [${layout.rows}x${layout.cols}] // ${new Date().toLocaleDateString()}`,
+        `${label} [${layout.rows}x${layout.cols}] // ${new Date().toLocaleDateString()}`,
         collageCanvas.width / 2,
-        collageCanvas.height - 30
+        collageCanvas.height - 32
       );
+
+      // Draw Placed PNG Stickers
+      for (const s of placedStickers) {
+        const stickerImg = new Image();
+        stickerImg.crossOrigin = "anonymous";
+        stickerImg.src = s.src;
+
+        const loaded = await new Promise<boolean>((resolve) => {
+          stickerImg.onload = () => resolve(true);
+          stickerImg.onerror = () => resolve(false);
+        });
+
+        if (!loaded || stickerImg.width === 0) continue;
+
+        const aspect = stickerImg.height / stickerImg.width;
+        const drawW = s.size;
+        const drawH = s.size * aspect;
+        const cx = s.x * collageCanvas.width;
+        const cy = s.y * collageCanvas.height;
+
+        ctx.drawImage(
+          stickerImg,
+          cx - drawW / 2,
+          cy - drawH / 2,
+          drawW,
+          drawH
+        );
+      }
 
       setFinalOutput(collageCanvas.toDataURL("image/png"));
     },
@@ -245,12 +297,26 @@ export function PhotoBooth() {
 
   useEffect(() => {
     if (capturedShots.length >= selectedLayout.totalShots) {
-      buildGridCollage(capturedShots, selectedLayout, frameTheme);
+      buildGridCollage(
+        capturedShots,
+        selectedLayout,
+        frameTheme,
+        customCaption,
+        stickers
+      );
     } else {
       setFinalOutput(null);
     }
-  }, [capturedShots, selectedLayout, frameTheme, buildGridCollage]);
+  }, [
+    capturedShots,
+    selectedLayout,
+    frameTheme,
+    customCaption,
+    stickers,
+    buildGridCollage,
+  ]);
 
+  // 4. Capture & Sticker Interaction Handlers
   const snapSingleFrame = (): string | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -303,6 +369,44 @@ export function PhotoBooth() {
     }
   };
 
+  const addPngSticker = (src: string) => {
+    setStickers((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random()}`,
+        src,
+        x: 0.45 + Math.random() * 0.1,
+        y: 0.45 + Math.random() * 0.1,
+        size: 160,
+      },
+    ]);
+  };
+
+  const handleUploadCustomPng = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        addPngSticker(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingId || !previewContainerRef.current) return;
+    const rect = previewContainerRef.current.getBoundingClientRect();
+    const nx = Math.min(0.95, Math.max(0.05, (e.clientX - rect.left) / rect.width));
+    const ny = Math.min(0.95, Math.max(0.05, (e.clientY - rect.top) / rect.height));
+
+    setStickers((prev) =>
+      prev.map((s) => (s.id === draggingId ? { ...s, x: nx, y: ny } : s))
+    );
+  };
+
   const downloadImage = () => {
     if (!finalOutput) return;
     const link = document.createElement("a");
@@ -331,8 +435,8 @@ export function PhotoBooth() {
                   disabled={isCapturing}
                   onClick={() => setSelectedLayout(layout)}
                   className={`brutal-btn px-2.5 py-1 font-pixel text-xs font-bold uppercase ${active
-                    ? "bg-[#22d3ee] text-zinc-950"
-                    : "bg-[#fffbeb] text-zinc-800 hover:bg-zinc-100"
+                      ? "bg-[#22d3ee] text-zinc-950"
+                      : "bg-[#fffbeb] text-zinc-800 hover:bg-zinc-100"
                     }`}
                 >
                   {layout.id}
@@ -377,7 +481,6 @@ export function PhotoBooth() {
 
         {/* CRT Monitor Viewport */}
         <div className="brutal-box relative overflow-hidden bg-zinc-950">
-          {/* Top Window Title Bar */}
           <div className="flex items-center justify-between border-b-[3px] border-zinc-950 bg-zinc-900 px-3 py-1.5 text-white">
             <div className="flex items-center gap-1.5">
               <span className="h-3 w-3 border border-black bg-[#f43f5e]" />
@@ -396,17 +499,14 @@ export function PhotoBooth() {
             <video ref={videoRef} playsInline muted className="hidden" />
             <canvas ref={canvasRef} className="aspect-video w-full object-cover" />
 
-            {/* Subtle Scanlines + Viewfinder Corner Crosshairs */}
             <div className="crt-scanlines pointer-events-none absolute inset-0" />
             <div className="pointer-events-none absolute top-3 left-3 h-5 w-5 border-t-[3px] border-l-[3px] border-[#facc15]" />
             <div className="pointer-events-none absolute top-3 right-3 h-5 w-5 border-t-[3px] border-r-[3px] border-[#facc15]" />
             <div className="pointer-events-none absolute bottom-3 left-3 h-5 w-5 border-b-[3px] border-l-[3px] border-[#facc15]" />
             <div className="pointer-events-none absolute bottom-3 right-3 h-5 w-5 border-b-[3px] border-r-[3px] border-[#facc15]" />
 
-            {/* Flash Overlay */}
             {flash && <div className="pointer-events-none absolute inset-0 bg-white" />}
 
-            {/* Pixel Countdown Overlay */}
             {countdown !== null && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/45">
                 <div className="brutal-box bg-[#facc15] px-8 py-4 font-pixel text-6xl font-bold text-zinc-950">
@@ -456,8 +556,8 @@ export function PhotoBooth() {
                 type="button"
                 onClick={() => setActiveFilter(filter)}
                 className={`brutal-btn flex flex-col items-start gap-1 p-3 text-left ${isSelected
-                  ? "bg-[#facc15] text-zinc-950"
-                  : "bg-white text-zinc-950 hover:bg-[#fef9c3]"
+                    ? "bg-[#facc15] text-zinc-950"
+                    : "bg-white text-zinc-950 hover:bg-[#fef9c3]"
                   }`}
               >
                 <span className="flex items-center gap-1 font-pixel text-xs font-bold uppercase">
@@ -498,6 +598,7 @@ export function PhotoBooth() {
                 onClick={() => {
                   setFinalOutput(null);
                   setCapturedShots([]);
+                  setStickers([]);
                 }}
                 className="brutal-btn flex items-center gap-1 bg-zinc-100 px-2 py-1 font-pixel text-[11px] font-bold uppercase"
               >
@@ -532,14 +633,130 @@ export function PhotoBooth() {
             </div>
           </div>
 
+          {/* Custom Frame Caption Input */}
+          <div className="space-y-1.5">
+            <label className="block font-pixel text-xs font-bold uppercase">
+              FRAME TEXT:
+            </label>
+            <input
+              type="text"
+              maxLength={28}
+              value={customCaption}
+              onChange={(e) => setCustomCaption(e.target.value)}
+              placeholder="TYPE YOUR CAPTION..."
+              className="w-full border-[2.5px] border-zinc-950 bg-[#fffbeb] px-3 py-1.5 font-mono text-xs font-bold uppercase focus:bg-[#fef08a] focus:outline-none"
+            />
+          </div>
+
+          {/* PNG Sticker Stamp Bar (Visible once photos are captured) */}
+          {finalOutput && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-pixel text-xs font-bold uppercase">
+                  PNG STICKERS (DRAG / DBL-CLICK DEL):
+                </span>
+                {stickers.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setStickers([])}
+                    className="font-pixel text-[10px] font-bold text-[#f43f5e] underline"
+                  >
+                    CLEAR
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-4 gap-1.5">
+                {BUILTIN_PNG_STICKERS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => addPngSticker(item.src)}
+                    className="brutal-btn flex h-12 items-center justify-center bg-white p-1.5 hover:bg-[#fef08a]"
+                    title={item.label}
+                  >
+                    <img
+                      src={item.src}
+                      alt={item.label}
+                      className="h-8 w-8 object-contain"
+                    />
+                  </button>
+                ))}
+              </div>
+
+              <label className="brutal-btn flex w-full cursor-pointer items-center justify-center gap-2 bg-[#22d3ee] py-2 font-pixel text-xs font-bold uppercase text-zinc-950">
+                + UPLOAD CUSTOM PNG
+                <input
+                  type="file"
+                  accept="image/png,image/webp,image/gif"
+                  onChange={handleUploadCustomPng}
+                  className="hidden"
+                />
+              </label>
+
+              {stickers.length > 0 && (
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="font-pixel text-[10px] font-bold uppercase">
+                    SIZE:
+                  </span>
+                  <input
+                    type="range"
+                    min={60}
+                    max={360}
+                    value={stickers[stickers.length - 1].size}
+                    onChange={(e) => {
+                      const nextSize = Number(e.target.value);
+                      setStickers((prev) =>
+                        prev.map((st, idx) =>
+                          idx === prev.length - 1 ? { ...st, size: nextSize } : st
+                        )
+                      );
+                    }}
+                    className="w-full accent-zinc-950"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Slot Matrix / Final Printed Strip */}
           <div className="flex min-h-[340px] items-center justify-center border-[3px] border-dashed border-zinc-950 bg-[#fffbeb] p-3">
             {finalOutput ? (
-              <img
-                src={finalOutput}
-                alt="Captured grid collage"
-                className="max-h-[450px] border-[3px] border-zinc-950 shadow-[4px_4px_0px_#09090b]"
-              />
+              <div
+                ref={previewContainerRef}
+                onPointerMove={handlePointerMove}
+                onPointerUp={() => setDraggingId(null)}
+                onPointerLeave={() => setDraggingId(null)}
+                className="relative inline-block touch-none select-none"
+              >
+                <img
+                  src={finalOutput}
+                  alt="Captured grid collage"
+                  draggable={false}
+                  className="max-h-[450px] border-[3px] border-zinc-950 shadow-[4px_4px_0px_#09090b]"
+                />
+                {stickers.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      setDraggingId(s.id);
+                    }}
+                    onDoubleClick={() =>
+                      setStickers((prev) => prev.filter((item) => item.id !== s.id))
+                    }
+                    title="Drag to move • Double-click to remove"
+                    style={{
+                      left: `${s.x * 100}%`,
+                      top: `${s.y * 100}%`,
+                      width: "56px",
+                      height: "56px",
+                    }}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border border-dashed border-transparent hover:border-zinc-950/50 active:cursor-grabbing"
+                  />
+                ))}
+              </div>
             ) : (
               <div
                 className="grid w-full gap-2"
