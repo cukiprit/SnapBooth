@@ -12,8 +12,14 @@ import {
   LayoutGrid,
   X,
   Zap,
+  QrCode
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
+// At the top of src/components/camera/photo-booth.tsx
+import { GifExportControls } from "./gif-export-controls";
+import { useQrShare } from "@/hooks/use-qr-share";
+import { QrShareModal } from "./qr-share-modal";
+import { generateBoothGif } from "@/lib/gif-export";
 import { CAMERA_FILTERS, type CameraFilter } from "@/lib/filters";
 import { GRID_LAYOUTS, type GridLayout } from "@/lib/grid-layouts";
 import { FRAME_STYLES, type FrameStyle } from "@/lib/frame-styles";
@@ -194,6 +200,52 @@ export function PhotoBooth() {
       return next;
     });
   };
+
+  const {
+    shareUrl,
+    status: qrStatus,
+    errorMsg: qrError,
+    startQrShare,
+    closeShare,
+  } = useQrShare();
+  const [qrFileLabel, setQrFileLabel] = useState("PNG STRIP");
+  const [isGeneratingQrGif, setIsGeneratingQrGif] = useState(false);
+
+  const validPhotos = slots.filter((s): s is string => Boolean(s));
+
+  async function handleSharePngQr() {
+    if (!finalOutput) return;
+    const res = await fetch(finalOutput);
+    const blob = await res.blob();
+    setQrFileLabel(`PNG (${selectedLayout.id})`);
+    await startQrShare(
+      blob,
+      `snapbooth-${selectedLayout.id}-${Date.now()}.png`,
+      customCaption || "SNAPBOOTH.EXE"
+    );
+  }
+
+  async function handleShareGifQr() {
+    if (validPhotos.length < 2 || isGeneratingQrGif) return;
+    setIsGeneratingQrGif(true);
+    try {
+      setQrFileLabel("ANIMATED GIF");
+      const blob = await generateBoothGif({
+        photos: validPhotos,
+        canvasFilter: "none",
+        boomerang: true,
+        width: 480,
+        height: 360,
+      });
+      await startQrShare(
+        blob,
+        `snapbooth-gif-${Date.now()}.gif`,
+        customCaption || "SNAPBOOTH.EXE"
+      );
+    } finally {
+      setIsGeneratingQrGif(false);
+    }
+  }
 
   // 1. Start / Switch Webcam Stream
   useEffect(() => {
@@ -1222,16 +1274,53 @@ export function PhotoBooth() {
           </div>
         )}
 
-        {/* 3. Save PNG Button */}
-        <button
-          type="button"
-          disabled={!finalOutput}
-          onClick={downloadImage}
-          className="brutal-btn flex h-10 w-full items-center justify-center gap-2 bg-[#a3e635] font-pixel text-xs font-bold uppercase text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Download className="h-4 w-4" />
-          SAVE PNG ({selectedLayout.id})
-        </button>
+        {/* 3. Save PNG & Export GIF Buttons */}
+        <div className="space-y-2">
+          <button
+            type="button"
+            disabled={!finalOutput}
+            onClick={downloadImage}
+            className="brutal-btn flex h-10 w-full items-center justify-center gap-2 bg-[#a3e635] font-pixel text-xs font-bold uppercase text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Download className="h-4 w-4" />
+            SAVE PNG ({selectedLayout.id})
+          </button>
+
+          <GifExportControls
+            capturedPhotos={slots.filter((s): s is string => Boolean(s))}
+            activeCanvasFilter={activeFilter.cssFilter(intensity)}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-1.5 pt-1">
+          <button
+            type="button"
+            disabled={!finalOutput}
+            onClick={handleSharePngQr}
+            className="brutal-btn flex h-9 items-center justify-center gap-1.5 bg-white px-2 font-pixel text-[10px] font-bold uppercase text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <QrCode className="h-3.5 w-3.5" />
+            QR PNG
+          </button>
+
+          <button
+            type="button"
+            disabled={validPhotos.length < 2 || isGeneratingQrGif}
+            onClick={handleShareGifQr}
+            className="brutal-btn flex h-9 items-center justify-center gap-1.5 bg-[#fef08a] px-2 font-pixel text-[10px] font-bold uppercase text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <QrCode className="h-3.5 w-3.5" />
+            {isGeneratingQrGif ? "ENCODING..." : "QR GIF"}
+          </button>
+        </div>
+
+        <QrShareModal
+          shareUrl={shareUrl}
+          status={qrStatus}
+          errorMsg={qrError}
+          fileLabel={qrFileLabel}
+          onClose={closeShare}
+        />
 
         {/* 4. Compact 2-Column Frame Style & Paper Theme Selectors */}
         <div className="grid grid-cols-2 gap-2">
