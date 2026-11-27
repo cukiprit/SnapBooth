@@ -15,6 +15,12 @@ import {
   QrCode
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
+import {
+  DoodleOverlay,
+  DoodleToolbar,
+  renderStrokesToCanvas,
+  type DoodleStroke,
+} from "./doodle-pad";
 // At the top of src/components/camera/photo-booth.tsx
 import { GifExportControls } from "./gif-export-controls";
 import { useQrShare } from "@/hooks/use-qr-share";
@@ -158,6 +164,13 @@ export function PhotoBooth() {
   const [captureMode, setCaptureMode] = useState<"single" | "burst">("single");
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
+
+  // Doodle
+  const [doodleActive, setDoodleActive] = useState(false);
+  const [doodleStrokes, setDoodleStrokes] = useState<DoodleStroke[]>([]);
+  const [penColor, setPenColor] = useState("#f43f5e");
+  const [penPixelated, setPenPixelated] = useState(true);
+  const [penSize, setPenSize] = useState(0.015);
 
   // Fixed-size slot array so individual slots can be deleted and re-shot
   const [slots, setSlots] = useState<(string | null)[]>(() =>
@@ -1121,7 +1134,10 @@ export function PhotoBooth() {
           {finalOutput ? (
             <div
               ref={previewContainerRef}
-              onPointerMove={handlePointerMove}
+              onPointerMove={(e) => {
+                if (doodleActive) return;
+                handlePointerMove(e);
+              }}
               onPointerUp={() => setDraggingId(null)}
               onPointerLeave={() => setDraggingId(null)}
               className="relative inline-block touch-none select-none"
@@ -1132,19 +1148,33 @@ export function PhotoBooth() {
                 draggable={false}
                 className="max-h-[280px] border-[3px] border-zinc-950 shadow-[4px_4px_0px_#09090b]"
               />
+
+              <DoodleOverlay
+                active={doodleActive}
+                strokes={doodleStrokes}
+                onAddStroke={(stroke) =>
+                  setDoodleStrokes((prev) => [...prev, stroke])
+                }
+                color={penColor}
+                brushSize={penSize}
+                pixelated={penPixelated}
+              />
+
               {stickers.map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   onPointerDown={(e) => {
+                    if (doodleActive) return;
                     e.stopPropagation();
                     setDraggingId(s.id);
                   }}
-                  onDoubleClick={() =>
+                  onDoubleClick={() => {
+                    if (doodleActive) return;
                     setStickers((prev) =>
                       prev.filter((item) => item.id !== s.id)
-                    )
-                  }
+                    );
+                  }}
                   title="Drag to move • Double-click to remove"
                   style={{
                     left: `${s.x * 100}%`,
@@ -1152,7 +1182,10 @@ export function PhotoBooth() {
                     width: "48px",
                     height: "48px",
                   }}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border border-dashed border-transparent hover:border-zinc-950/50 active:cursor-grabbing"
+                  className={`absolute z-30 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-transparent ${doodleActive
+                      ? "pointer-events-none"
+                      : "cursor-grab hover:border-zinc-950/50 active:cursor-grabbing"
+                    }`}
                 />
               ))}
             </div>
@@ -1271,6 +1304,19 @@ export function PhotoBooth() {
                 />
               </div>
             )}
+            <DoodleToolbar
+              active={doodleActive}
+              onToggleActive={() => setDoodleActive((a) => !a)}
+              color={penColor}
+              onChangeColor={setPenColor}
+              pixelated={penPixelated}
+              onTogglePixelated={() => setPenPixelated((p) => !p)}
+              brushSize={penSize}
+              onChangeBrushSize={setPenSize}
+              canUndo={doodleStrokes.length > 0}
+              onUndo={() => setDoodleStrokes((prev) => prev.slice(0, -1))}
+              onClear={() => setDoodleStrokes([])}
+            />
           </div>
         )}
 
